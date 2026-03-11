@@ -107,8 +107,13 @@ export default function Notifications() {
       <PageHeader
         title="Notifica\u00e7\u00f5es"
         actions={
-          <button className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
-            <MoreVertical className="w-5 h-5" />
+          <button
+            onClick={() => {
+              allNotifications.filter(n => !n.read).forEach(n => markNotificationRead(n.id))
+            }}
+            className="px-3 py-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold text-brand-500"
+          >
+            <CheckCheck className="w-5 h-5" />
           </button>
         }
       />

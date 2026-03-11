@@ -266,7 +266,17 @@ export default function Profile() {
               icon={HelpCircle}
               iconColor="bg-slate-100 dark:bg-slate-700/50 text-slate-500"
               title="Ajuda e Suporte"
-              onClick={() => alert('Central de Ajuda em breve!')}
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'Unity Finance - Ajuda',
+                    text: 'Preciso de ajuda com o Unity Finance',
+                    url: 'mailto:suporte@unityfinance.app'
+                  }).catch(() => {})
+                } else {
+                  window.open('mailto:suporte@unityfinance.app', '_blank')
+                }
+              }}
             />
           </Card>
         </motion.div>

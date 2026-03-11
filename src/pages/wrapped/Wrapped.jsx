@@ -89,7 +89,17 @@ export default function Wrapped() {
           >
             <X className="w-5 h-5" />
           </button>
-          <button className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/25 transition-colors">
+          <button
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({
+                  title: `Unity Wrapped ${currentYear}`,
+                  text: `${userName}${hasPartner ? ` & ${partnerName}` : ''} economizaram ${formatCurrency(stats.totalSaved)} juntos em ${currentYear}!`
+                }).catch(() => {})
+              }
+            }}
+            className="w-10 h-10 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/25 transition-colors"
+          >
             <Share2 className="w-5 h-5" />
           </button>
         </div>
@@ -216,7 +226,17 @@ export default function Wrapped() {
                 <ArrowRight className="w-4 h-4" />
               </button>
 
-              <button className="w-full py-3.5 rounded-xl border-2 border-white/30 text-white font-semibold text-sm hover:bg-white/10 active:scale-[0.97] transition-all flex items-center justify-center gap-2">
+              <button
+                onClick={() => {
+                  if (navigator.share) {
+                    navigator.share({
+                      title: `Unity Wrapped ${currentYear}`,
+                      text: `Nosso Unity Wrapped ${currentYear} está pronto! Economizamos ${formatCurrency(stats.totalSaved)} juntos e completamos ${stats.goalsAchieved} metas!`
+                    }).catch(() => {})
+                  }
+                }}
+                className="w-full py-3.5 rounded-xl border-2 border-white/30 text-white font-semibold text-sm hover:bg-white/10 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+              >
                 <Heart className="w-4 h-4" />
                 Compartilhar com Parceiro
               </button>

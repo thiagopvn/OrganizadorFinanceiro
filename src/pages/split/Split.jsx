@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  MoreVertical, ArrowRight, CreditCard, TrendingUp,
+  ArrowRight, CreditCard, TrendingUp,
   Tv, Music, Dumbbell, Cloud, Plus, Users, DollarSign, X, Check
 } from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Button, Card, Badge, Toggle, SectionHeader, ListItem, EmptyState } from '../../components/ui'
 import useStore from '../../lib/store'
+import { addSubscription } from '../../lib/firebase'
 import { formatCurrency } from '../../lib/utils'
 
 const SUBSCRIPTION_ICONS = {
@@ -19,10 +20,11 @@ const SUBSCRIPTION_ICONS = {
 
 export default function Split() {
   const navigate = useNavigate()
-  const { subscriptions, setSubscriptions, user, partner } = useStore()
+  const { subscriptions, coupleId, user, partner } = useStore()
   const [proportionalEnabled, setProportionalEnabled] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [newSub, setNewSub] = useState({ name: '', amount: '', billingDate: '', splitType: 'equal' })
+  const [savingSub, setSavingSub] = useState(false)
 
   const partnerAName = user?.displayName || 'Você'
   const partnerBName = partner?.displayName || 'Parceiro(a)'
@@ -31,22 +33,25 @@ export default function Split() {
   const activeSubscriptions = subscriptions.filter(s => s.active)
   const totalMonthly = activeSubscriptions.reduce((sum, s) => sum + s.amount, 0)
 
-  const handleAddSubscription = () => {
-    if (!newSub.name || !newSub.amount) return
-
-    const subscription = {
-      id: `sub_${Date.now()}`,
-      name: newSub.name,
-      amount: parseFloat(newSub.amount),
-      category: 'assinatura',
-      billingDate: parseInt(newSub.billingDate) || 1,
-      splitType: newSub.splitType,
-      active: true,
+  const handleAddSubscription = async () => {
+    if (!newSub.name || !newSub.amount || !coupleId || savingSub) return
+    setSavingSub(true)
+    try {
+      await addSubscription(coupleId, {
+        name: newSub.name,
+        amount: parseFloat(newSub.amount),
+        category: 'assinatura',
+        billingDate: parseInt(newSub.billingDate) || 1,
+        splitType: newSub.splitType,
+      })
+      setNewSub({ name: '', amount: '', billingDate: '', splitType: 'equal' })
+      setShowAddModal(false)
+    } catch (err) {
+      console.error('Erro ao adicionar assinatura:', err)
+      alert('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSavingSub(false)
     }
-
-    setSubscriptions([...subscriptions, subscription])
-    setNewSub({ name: '', amount: '', billingDate: '', splitType: 'equal' })
-    setShowAddModal(false)
   }
 
   return (
@@ -54,8 +59,11 @@ export default function Split() {
       <PageHeader
         title="Divisão e Assinaturas"
         actions={
-          <button className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
-            <MoreVertical className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+          <button
+            onClick={() => navigate('/app/split/config')}
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
+          >
+            <ArrowRight className="w-5 h-5 text-slate-600 dark:text-slate-300" />
           </button>
         }
       />
@@ -121,6 +129,23 @@ export default function Split() {
               })}
             </Card>
           )}
+        </motion.div>
+
+        {/* Acerto Mensal */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card padding="p-2">
+            <ListItem
+              icon={DollarSign}
+              iconColor="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500"
+              title="Acerto Mensal"
+              subtitle="Veja e confirme os acertos pendentes"
+              onClick={() => navigate('/app/split/settle')}
+            />
+          </Card>
         </motion.div>
 
         {/* Configuração de Divisão */}
@@ -272,7 +297,8 @@ export default function Split() {
                 size="lg"
                 icon={Check}
                 onClick={handleAddSubscription}
-                disabled={!newSub.name || !newSub.amount}
+                disabled={!newSub.name || !newSub.amount || savingSub}
+                loading={savingSub}
               >
                 Adicionar Assinatura
               </Button>

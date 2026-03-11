@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button, Card } from '../../components/ui'
 import { PageHeader } from '../../components/layout'
+import useStore from '../../lib/store'
+import { formatCurrency, CATEGORIES } from '../../lib/utils'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { format, subMonths, startOfMonth, endOfMonth, subQuarters } from 'date-fns'
 import {
   FileText,
   Table,
@@ -50,8 +53,85 @@ const PERIODS = [
 
 export default function Export() {
   const navigate = useNavigate()
-  const [selectedFormat, setSelectedFormat] = useState('pdf')
+  const { transactions } = useStore()
+  const [selectedFormat, setSelectedFormat] = useState('csv')
   const [selectedPeriod, setSelectedPeriod] = useState('quarter')
+  const [exporting, setExporting] = useState(false)
+
+  const filteredTransactions = useMemo(() => {
+    const now = new Date()
+    let start, end
+    if (selectedPeriod === 'month') {
+      start = startOfMonth(now)
+      end = endOfMonth(now)
+    } else if (selectedPeriod === 'quarter') {
+      start = startOfMonth(subMonths(now, 2))
+      end = endOfMonth(now)
+    } else {
+      start = startOfMonth(subMonths(now, 11))
+      end = endOfMonth(now)
+    }
+    return transactions.filter(t => {
+      const d = new Date(t.date || t.createdAt)
+      return d >= start && d <= end
+    })
+  }, [transactions, selectedPeriod])
+
+  const handleExport = () => {
+    if (filteredTransactions.length === 0) {
+      alert('Nenhuma transação encontrada para o período selecionado.')
+      return
+    }
+    setExporting(true)
+    try {
+      if (selectedFormat === 'csv') {
+        exportCSV()
+      } else if (selectedFormat === 'ofx') {
+        exportOFX()
+      } else {
+        exportCSV() // PDF fallback to CSV
+      }
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const exportCSV = () => {
+    const header = 'Data,Descrição,Categoria,Valor,Tipo,Compartilhada\n'
+    const rows = filteredTransactions.map(t => {
+      const d = format(new Date(t.date || t.createdAt), 'dd/MM/yyyy')
+      const cat = CATEGORIES[t.category]?.label || t.category || ''
+      const desc = (t.description || '').replace(/,/g, ';')
+      const tipo = t.amount >= 0 ? 'Receita' : 'Despesa'
+      const shared = t.isShared ? 'Sim' : 'Não'
+      return `${d},${desc},${cat},${t.amount.toFixed(2)},${tipo},${shared}`
+    }).join('\n')
+
+    downloadFile(header + rows, 'unity-finance-extrato.csv', 'text/csv')
+  }
+
+  const exportOFX = () => {
+    const now = format(new Date(), 'yyyyMMddHHmmss')
+    let ofx = `OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\n<OFX>\n<BANKMSGSRSV1>\n<STMTTRNRS>\n<STMTRS>\n<BANKTRANLIST>\n`
+    filteredTransactions.forEach(t => {
+      const d = format(new Date(t.date || t.createdAt), 'yyyyMMdd')
+      ofx += `<STMTTRN>\n<TRNTYPE>${t.amount >= 0 ? 'CREDIT' : 'DEBIT'}\n<DTPOSTED>${d}\n<TRNAMT>${t.amount.toFixed(2)}\n<MEMO>${t.description || ''}\n</STMTTRN>\n`
+    })
+    ofx += `</BANKTRANLIST>\n</STMTRS>\n</STMTTRNRS>\n</BANKMSGSRSV1>\n</OFX>`
+    downloadFile(ofx, 'unity-finance-extrato.ofx', 'application/x-ofx')
+  }
+
+  const downloadFile = (content, filename, type) => {
+    const blob = new Blob([content], { type: `${type};charset=utf-8` })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="min-h-screen bg-orange-50/50 dark:bg-slate-900">
@@ -198,8 +278,8 @@ export default function Export() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.35 }}
         >
-          <Button fullWidth size="lg" icon={Download}>
-            Gerar Relat\u00f3rio
+          <Button fullWidth size="lg" icon={Download} onClick={handleExport} loading={exporting}>
+            Gerar Relat\u00f3rio ({filteredTransactions.length} transações)
           </Button>
         </motion.div>
       </div>

@@ -86,8 +86,6 @@ async function sendPushNotification(tokens, title, body) {
  */
 async function createNotificationDoc({ userId, coupleId, type, title, message }) {
   return db
-    .collection("couples")
-    .doc(coupleId)
     .collection("notifications")
     .add({
       userId,

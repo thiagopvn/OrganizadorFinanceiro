@@ -6,12 +6,13 @@ import * as LucideIcons from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Card, Input, TabBar, ProgressBar, Toggle, Button } from '../../components/ui'
 import useStore from '../../lib/store'
+import { addGoal, updateGoal, deleteGoal, addBudget, updateBudget } from '../../lib/firebase'
 import { formatCurrency, CATEGORIES } from '../../lib/utils'
 
 export default function EditGoal() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { goals, budgets } = useStore()
+  const { goals, budgets, coupleId } = useStore()
 
   const isNew = !id
   const existingGoal = useMemo(() => {
@@ -29,6 +30,7 @@ export default function EditGoal() {
   const [frequency, setFrequency] = useState(existingGoal?.frequency || 'monthly')
   const [remindersEnabled, setRemindersEnabled] = useState(true)
   const [autoInvest, setAutoInvest] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const categoryKey = existingGoal?.category || 'outros'
   const category = CATEGORIES[categoryKey] || CATEGORIES.outros
@@ -59,14 +61,53 @@ export default function EditGoal() {
 
   const percent = targetAmount > 0 ? Math.round((currentAmount / targetAmount) * 100) : 0
 
-  const handleSave = () => {
-    // In a real app, this would save to store/backend
-    navigate(-1)
+  const handleSave = async () => {
+    if (!coupleId || !name.trim() || saving) return
+    setSaving(true)
+    try {
+      const data = {
+        name: name.trim(),
+        targetAmount,
+        category: categoryKey,
+        frequency,
+        icon: existingGoal?.icon || 'Target',
+        reminders: remindersEnabled,
+        autoInvest,
+      }
+      if (isGoal) {
+        if (isNew) {
+          await addGoal(coupleId, data)
+        } else {
+          await updateGoal(coupleId, id, data)
+        }
+      } else {
+        if (isNew) {
+          await addBudget(coupleId, { ...data, limit: targetAmount, period: frequency })
+        } else {
+          await updateBudget(coupleId, id, { ...data, limit: targetAmount, period: frequency })
+        }
+      }
+      navigate(-1)
+    } catch (err) {
+      console.error('Erro ao salvar:', err)
+      alert('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleDelete = () => {
-    // In a real app, this would delete from store/backend
-    navigate(-1)
+  const handleDelete = async () => {
+    if (!coupleId || !id || saving) return
+    setSaving(true)
+    try {
+      await deleteGoal(coupleId, id)
+      navigate(-1)
+    } catch (err) {
+      console.error('Erro ao excluir:', err)
+      alert('Erro ao excluir. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const containerVariants = {

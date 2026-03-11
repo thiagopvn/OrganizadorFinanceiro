@@ -12,7 +12,7 @@ import { formatCurrency, formatDateTime, CATEGORIES } from '../../lib/utils'
 
 export default function TransactionDetail() {
   const { id } = useParams()
-  const { transactions, privacyMode } = useStore()
+  const { transactions, privacyMode, user, partner } = useStore()
   const [commentText, setCommentText] = useState('')
   const commentsEndRef = useRef(null)
 
@@ -20,33 +20,10 @@ export default function TransactionDetail() {
     return transactions.find(t => t.id === id)
   }, [transactions, id])
 
-  // Demo comments
-  const [comments, setComments] = useState([
-    {
-      id: 'c1',
-      userId: 'user2',
-      name: 'Ana',
-      message: 'Precisava mesmo ir ao mercado? Já fomos semana passada.',
-      timestamp: new Date(Date.now() - 3600000 * 2),
-      isOwn: false
-    },
-    {
-      id: 'c2',
-      userId: 'user1',
-      name: 'Você',
-      message: 'Sim, faltava coisa pra janta de hoje. Comprei só o necessário!',
-      timestamp: new Date(Date.now() - 3600000),
-      isOwn: true
-    },
-    {
-      id: 'c3',
-      userId: 'user2',
-      name: 'Ana',
-      message: 'Ok, faz sentido. Da próxima vez me avisa antes pra eu ver se precisa de mais alguma coisa.',
-      timestamp: new Date(Date.now() - 1800000),
-      isOwn: false
-    }
-  ])
+  const userName = user?.displayName || 'Você'
+  const partnerName = partner?.displayName || 'Parceiro(a)'
+
+  const [comments, setComments] = useState([])
 
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -73,8 +50,8 @@ export default function TransactionDetail() {
     if (!commentText.trim()) return
     setComments(prev => [...prev, {
       id: `c${Date.now()}`,
-      userId: 'user1',
-      name: 'Você',
+      userId: user?.uid,
+      name: userName,
       message: commentText.trim(),
       timestamp: new Date(),
       isOwn: true
@@ -107,7 +84,17 @@ export default function TransactionDetail() {
       <PageHeader
         title="Detalhe da Transação"
         actions={
-          <button className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">
+          <button
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({
+                  title: transaction.description,
+                  text: `${transaction.description}: ${formatCurrency(transaction.amount)}`
+                }).catch(() => {})
+              }
+            }}
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+          >
             <Share2 className="w-5 h-5" />
           </button>
         }
@@ -180,11 +167,11 @@ export default function TransactionDetail() {
                 <p className="text-sm text-slate-500 dark:text-slate-400">Pago por</p>
                 <div className="flex items-center gap-2">
                   <Avatar
-                    name={transaction.paidBy === 'user1' ? 'Você' : 'Ana'}
+                    name={transaction.paidBy === user?.uid ? userName : partnerName}
                     size="sm"
                   />
                   <p className="text-sm font-medium text-slate-800 dark:text-white">
-                    {transaction.paidBy === 'user1' ? 'Você' : 'Ana'}
+                    {transaction.paidBy === user?.uid ? userName : partnerName}
                   </p>
                 </div>
               </div>

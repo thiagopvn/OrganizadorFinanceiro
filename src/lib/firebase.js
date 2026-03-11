@@ -167,6 +167,33 @@ export const addSubscription = (coupleId, data) =>
     createdAt: serverTimestamp()
   })
 
+export const deleteSubscription = (coupleId, subscriptionId) =>
+  deleteDoc(doc(db, 'couples', coupleId, 'subscriptions', subscriptionId))
+
+// Card helpers
+export const addCard = (coupleId, data) =>
+  addDoc(collection(db, 'couples', coupleId, 'cards'), {
+    ...data,
+    createdAt: serverTimestamp()
+  })
+
+export const deleteCard = (coupleId, cardId) =>
+  deleteDoc(doc(db, 'couples', coupleId, 'cards', cardId))
+
+// Investment helpers
+export const addInvestment = (coupleId, data) =>
+  addDoc(collection(db, 'couples', coupleId, 'investments'), {
+    ...data,
+    createdAt: serverTimestamp()
+  })
+
+export const deleteInvestment = (coupleId, investmentId) =>
+  deleteDoc(doc(db, 'couples', coupleId, 'investments', investmentId))
+
+// Couple settings
+export const updateCoupleSettings = (coupleId, data) =>
+  updateDoc(doc(db, 'couples', coupleId), data)
+
 // Storage helpers
 export const uploadReceipt = async (coupleId, transactionId, file) => {
   const storageRef = ref(storage, `receipts/${coupleId}/${transactionId}/${file.name}`)
@@ -208,6 +235,33 @@ export const subscribeToSubscriptions = (coupleId, callback) => {
   return onSnapshot(q, (snapshot) => {
     const subs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
     callback(subs)
+  })
+}
+
+export const subscribeToSettlements = (coupleId, callback) => {
+  const q = query(
+    collection(db, 'couples', coupleId, 'settlements'),
+    orderBy('createdAt', 'desc')
+  )
+  return onSnapshot(q, (snapshot) => {
+    const settlements = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+    callback(settlements)
+  })
+}
+
+export const subscribeToCards = (coupleId, callback) => {
+  const q = query(collection(db, 'couples', coupleId, 'cards'))
+  return onSnapshot(q, (snapshot) => {
+    const cards = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+    callback(cards)
+  })
+}
+
+export const subscribeToInvestments = (coupleId, callback) => {
+  const q = query(collection(db, 'couples', coupleId, 'investments'))
+  return onSnapshot(q, (snapshot) => {
+    const investments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+    callback(investments)
   })
 }
 

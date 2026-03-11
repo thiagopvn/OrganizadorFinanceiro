@@ -125,8 +125,6 @@ export default function Budgets() {
         <motion.div variants={itemVariants}>
           <SectionHeader
             title="Categorias em Aberto"
-            action="Ver Detalhes"
-            onAction={() => {}}
           />
           <div className="space-y-3">
             {activeBudgets.map(budget => {

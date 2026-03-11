@@ -7,6 +7,7 @@ import {
 import { PageHeader } from '../../components/layout'
 import { Button, Card, SectionHeader } from '../../components/ui'
 import useStore from '../../lib/store'
+import { updateCoupleSettings } from '../../lib/firebase'
 import { formatCurrency } from '../../lib/utils'
 
 const SPLIT_OPTIONS = [
@@ -32,9 +33,12 @@ const SPLIT_OPTIONS = [
 
 export default function SplitConfig() {
   const navigate = useNavigate()
-  const { user, partner } = useStore()
-  const [selectedOption, setSelectedOption] = useState('proportional')
-  const [sliderValue, setSliderValue] = useState(50)
+  const { user, partner, coupleId, couple } = useStore()
+  const [selectedOption, setSelectedOption] = useState(couple?.splitRule || 'proportional')
+  const [sliderValue, setSliderValue] = useState(
+    couple?.splitRatio?.[user?.uid] || 50
+  )
+  const [saving, setSaving] = useState(false)
 
   const partnerAName = user?.displayName || 'Você'
   const partnerBName = partner?.displayName || 'Parceiro(a)'
@@ -42,8 +46,24 @@ export default function SplitConfig() {
   const partnerAPercent = selectedOption === 'equal' ? 50 : sliderValue
   const partnerBPercent = 100 - partnerAPercent
 
-  const handleConfirm = () => {
-    navigate(-1)
+  const handleConfirm = async () => {
+    if (!coupleId || saving) return
+    setSaving(true)
+    try {
+      const splitRatio = {}
+      if (user?.uid) splitRatio[user.uid] = partnerAPercent
+      if (partner?.uid) splitRatio[partner.uid] = partnerBPercent
+      await updateCoupleSettings(coupleId, {
+        splitRule: selectedOption,
+        splitRatio,
+      })
+      navigate(-1)
+    } catch (err) {
+      console.error('Erro ao salvar configuração:', err)
+      alert('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -201,6 +221,7 @@ export default function SplitConfig() {
             size="lg"
             icon={Check}
             onClick={handleConfirm}
+            loading={saving}
           >
             Confirmar e Aplicar
           </Button>

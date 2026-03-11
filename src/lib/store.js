@@ -53,6 +53,18 @@ const useStore = create((set, get) => ({
   subscriptions: [],
   setSubscriptions: (subscriptions) => set({ subscriptions }),
 
+  // Settlements
+  settlements: [],
+  setSettlements: (settlements) => set({ settlements }),
+
+  // Cards
+  cards: [],
+  setCards: (cards) => set({ cards }),
+
+  // Investments
+  investments: [],
+  setInvestments: (investments) => set({ investments }),
+
   // UI State
   showAddTransaction: false,
   setShowAddTransaction: (show) => set({ showAddTransaction: show }),
@@ -92,7 +104,7 @@ const useStore = create((set, get) => ({
   // Reset all data on logout
   reset: () => set({
     user: null, userProfile: null, couple: null, partner: null, coupleId: null,
-    transactions: [], budgets: [], goals: [], subscriptions: [], notifications: []
+    transactions: [], budgets: [], goals: [], subscriptions: [], settlements: [], cards: [], investments: [], notifications: []
   })
 }))
 

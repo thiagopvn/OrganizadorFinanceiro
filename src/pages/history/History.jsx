@@ -12,7 +12,7 @@ import { formatCurrency, formatDate, CATEGORIES, CATEGORY_LIST, getProgressColor
 
 export default function History() {
   const navigate = useNavigate()
-  const { transactions, budgets, privacyMode } = useStore()
+  const { transactions, budgets, privacyMode, user, partner } = useStore()
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState(new Date())
@@ -190,27 +190,29 @@ export default function History() {
                       Todos
                     </button>
                     <button
-                      onClick={() => setSelectedPartner(selectedPartner === 'user1' ? null : 'user1')}
+                      onClick={() => setSelectedPartner(selectedPartner === user?.uid ? null : user?.uid)}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        selectedPartner === 'user1'
+                        selectedPartner === user?.uid
                           ? 'bg-brand-500 text-white'
                           : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
                       }`}
                     >
-                      <Avatar name="Você" size="sm" className="w-5 h-5 text-[8px]" />
-                      Você
+                      <Avatar name={user?.displayName || 'Você'} size="sm" className="w-5 h-5 text-[8px]" />
+                      {user?.displayName || 'Você'}
                     </button>
-                    <button
-                      onClick={() => setSelectedPartner(selectedPartner === 'user2' ? null : 'user2')}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        selectedPartner === 'user2'
-                          ? 'bg-brand-500 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      <Avatar name="Parceiro(a)" size="sm" className="w-5 h-5 text-[8px]" />
-                      Parceiro(a)
-                    </button>
+                    {partner && (
+                      <button
+                        onClick={() => setSelectedPartner(selectedPartner === partner?.uid ? null : partner?.uid)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                          selectedPartner === partner?.uid
+                            ? 'bg-brand-500 text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
+                        <Avatar name={partner?.displayName || 'Parceiro(a)'} size="sm" className="w-5 h-5 text-[8px]" />
+                        {partner?.displayName || 'Parceiro(a)'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

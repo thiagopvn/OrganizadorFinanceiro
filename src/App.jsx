@@ -5,6 +5,7 @@ import {
   onAuthChange, db, doc, getDoc, setDoc, collection, query, where,
   getDocs, serverTimestamp, onSnapshot, orderBy,
   subscribeToTransactions, subscribeToBudgets, subscribeToGoals, subscribeToSubscriptions,
+  subscribeToSettlements, subscribeToCards, subscribeToInvestments,
   createCouple
 } from './lib/firebase'
 import { AppLayout } from './components/layout'
@@ -38,7 +39,7 @@ import { SuccessModal, AchievementModal } from './pages/modals/Modals'
 export default function App() {
   const {
     user, setUser, setUserProfile, setCoupleId, setCouple, setPartner,
-    setTransactions, setBudgets, setGoals, setSubscriptions, setNotifications,
+    setTransactions, setBudgets, setGoals, setSubscriptions, setSettlements, setCards, setInvestments, setNotifications,
     setIsLoading, isLoading, initTheme, reset,
     showAddTransaction, setShowAddTransaction,
     showSuccess, setShowSuccess,
@@ -126,6 +127,9 @@ export default function App() {
       const unsubBudgets = subscribeToBudgets(coupleId, (b) => setBudgets(b))
       const unsubGoals = subscribeToGoals(coupleId, (g) => setGoals(g))
       const unsubSubs = subscribeToSubscriptions(coupleId, (s) => setSubscriptions(s))
+      const unsubSettlements = subscribeToSettlements(coupleId, (s) => setSettlements(s))
+      const unsubCards = subscribeToCards(coupleId, (c) => setCards(c))
+      const unsubInvestments = subscribeToInvestments(coupleId, (i) => setInvestments(i))
 
       // Subscribe to notifications for this user
       const notifQuery = query(
@@ -140,7 +144,7 @@ export default function App() {
         console.warn('Erro ao carregar notificações:', err)
       })
 
-      unsubsRef.current = [unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubNotif]
+      unsubsRef.current = [unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubSettlements, unsubCards, unsubInvestments, unsubNotif]
 
     } catch (e) {
       console.error('Erro ao inicializar dados do usuário:', e)
