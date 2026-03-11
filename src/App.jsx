@@ -106,21 +106,26 @@ export default function App() {
 
       setCoupleId(coupleId)
 
-      // 3. Load couple document and partner info
-      const coupleSnap = await getDoc(doc(db, 'couples', coupleId))
-      if (coupleSnap.exists()) {
-        const coupleData = { id: coupleId, ...coupleSnap.data() }
-        setCouple(coupleData)
+      // 3. Listen to couple document in real-time (detects when partner joins)
+      const unsubCouple = onSnapshot(doc(db, 'couples', coupleId), async (coupleSnap) => {
+        if (coupleSnap.exists()) {
+          const coupleData = { id: coupleId, ...coupleSnap.data() }
+          setCouple(coupleData)
 
-        // Load partner profile
-        const partnerUid = coupleData.partnerIds?.find(id => id !== firebaseUser.uid)
-        if (partnerUid) {
-          const partnerSnap = await getDoc(doc(db, 'users', partnerUid))
-          if (partnerSnap.exists()) {
-            setPartner({ uid: partnerUid, ...partnerSnap.data() })
+          // Load partner profile
+          const partnerUid = coupleData.partnerIds?.find(id => id !== firebaseUser.uid)
+          if (partnerUid) {
+            const currentPartner = useStore.getState().partner
+            // Only fetch partner if not loaded or UID changed
+            if (!currentPartner || currentPartner.uid !== partnerUid) {
+              const partnerSnap = await getDoc(doc(db, 'users', partnerUid))
+              if (partnerSnap.exists()) {
+                setPartner({ uid: partnerUid, ...partnerSnap.data() })
+              }
+            }
           }
         }
-      }
+      })
 
       // 4. Subscribe to real-time data
       const unsubTx = subscribeToTransactions(coupleId, (txs) => setTransactions(txs))
@@ -144,7 +149,7 @@ export default function App() {
         console.warn('Erro ao carregar notificações:', err)
       })
 
-      unsubsRef.current = [unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubSettlements, unsubCards, unsubInvestments, unsubNotif]
+      unsubsRef.current = [unsubCouple, unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubSettlements, unsubCards, unsubInvestments, unsubNotif]
 
     } catch (e) {
       console.error('Erro ao inicializar dados do usuário:', e)

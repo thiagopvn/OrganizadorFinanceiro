@@ -112,6 +112,11 @@ export const joinCouple = async (coupleId, userId) => {
   const coupleDoc = await getDoc(doc(db, 'couples', coupleId))
   if (!coupleDoc.exists()) throw new Error('Casal não encontrado')
   const data = coupleDoc.data()
+  // If user is already in this couple, just ensure their user doc has the coupleId
+  if (data.partnerIds.includes(userId)) {
+    await updateDoc(doc(db, 'users', userId), { coupleId })
+    return
+  }
   if (data.partnerIds.length >= 2) throw new Error('Este casal já está completo')
   await updateDoc(doc(db, 'couples', coupleId), {
     partnerIds: [...data.partnerIds, userId],
