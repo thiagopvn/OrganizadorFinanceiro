@@ -96,6 +96,14 @@ export const getInitials = (name) => {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
+// Safe Firestore Timestamp → JS Date conversion
+export const toDate = (d) => {
+  if (!d) return new Date()
+  if (d?.toDate) return d.toDate()
+  if (d instanceof Date) return d
+  return new Date(d)
+}
+
 // Clamp number
 export const clamp = (num, min, max) => Math.min(Math.max(num, min), max)
 
@@ -103,7 +111,7 @@ export const clamp = (num, min, max) => Math.min(Math.max(num, min), max)
 export const groupByDate = (transactions) => {
   const groups = {}
   transactions.forEach(t => {
-    const date = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt || t.date)
+    const date = toDate(t.date || t.createdAt)
     const key = format(date, 'yyyy-MM-dd')
     if (!groups[key]) groups[key] = { date, transactions: [] }
     groups[key].transactions.push(t)

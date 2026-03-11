@@ -2,13 +2,14 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Bell, Eye, EyeOff, TrendingUp, ArrowRight,
-  Wallet, CreditCard, BarChart3, Scissors,
+  Bell, Eye, EyeOff, TrendingUp, ArrowRight, AlertTriangle,
+  Wallet, CreditCard, BarChart3, Scissors, Target,
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
   Heart, GraduationCap, ShoppingBag, Briefcase,
   Gift, Plane, MoreHorizontal, Shield, Zap
 } from 'lucide-react'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, EmptyState } from '../../components/ui'
+import { getProgressColor, getProgressTextColor } from '../../lib/utils'
 import { PageTransition } from '../../components/layout'
 import useStore from '../../lib/store'
 import { formatCurrency, formatDate, CATEGORIES } from '../../lib/utils'
@@ -37,12 +38,21 @@ export default function Dashboard() {
   const {
     transactions, goals, notifications,
     privacyMode, togglePrivacyMode,
-    getNetWorth, getBalance, user, partner
+    getNetWorth, getBalance, getBudgetsWithSpent, user, partner
   } = useStore()
 
+  const budgets = getBudgetsWithSpent()
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
   const balance = getBalance()
   const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions])
+
+  // Budget alerts - categories approaching or over limit
+  const budgetAlerts = useMemo(() => {
+    return budgets
+      .map(b => ({ ...b, percent: b.limit > 0 ? Math.round((b.spent / b.limit) * 100) : 0 }))
+      .filter(b => b.percent >= 70)
+      .sort((a, b) => b.percent - a.percent)
+  }, [budgets])
 
   const displayValue = (value) => {
     if (privacyMode) return 'R$ ••••••'
@@ -125,8 +135,9 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <motion.div variants={itemVariants}>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {[
+              { icon: Target, label: 'Metas', path: '/app/budgets', color: 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' },
               { icon: Scissors, label: 'Divisão', path: '/app/split', color: 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400' },
               { icon: CreditCard, label: 'Cartões', path: '/app/cards', color: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' },
               { icon: BarChart3, label: 'Investimentos', path: '/app/investments', color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' }
@@ -146,14 +157,57 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Shared Goals */}
-        {goals.length > 0 && (
+        {/* Budget Alerts */}
+        {budgetAlerts.length > 0 && (
           <motion.div variants={itemVariants}>
             <SectionHeader
-              title="Metas Compartilhadas"
-              action="Ver todas"
+              title="Alertas de Orçamento"
+              action="Ver orçamentos"
               onAction={() => navigate('/app/budgets')}
             />
+            <div className="space-y-2">
+              {budgetAlerts.slice(0, 3).map(alert => {
+                const cat = CATEGORIES[alert.category] || CATEGORIES.outros
+                const IconComponent = ICON_MAP[cat.icon] || MoreHorizontal
+                const isOver = alert.percent >= 100
+                return (
+                  <Card key={alert.id} padding="p-3" onClick={() => navigate('/app/budgets')}>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: `${cat.color}15` }}
+                      >
+                        <IconComponent className="w-4.5 h-4.5" style={{ color: cat.color }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{cat.label}</p>
+                          <span className={`text-xs font-bold ${getProgressTextColor(alert.percent)}`}>
+                            {alert.percent}%
+                          </span>
+                        </div>
+                        <ProgressBar value={alert.spent} max={alert.limit} size="sm" />
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                          {privacyMode ? '••••' : formatCurrency(alert.spent)} de {privacyMode ? '••••' : formatCurrency(alert.limit)}
+                          {isOver && ' — Limite ultrapassado!'}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Shared Goals */}
+        <motion.div variants={itemVariants}>
+          <SectionHeader
+            title="Metas Compartilhadas"
+            action={goals.length > 0 ? "Ver todas" : "Criar meta"}
+            onAction={() => navigate(goals.length > 0 ? '/app/budgets' : '/app/budgets/new')}
+          />
+          {goals.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
               {goals.map((goal) => {
                 const percent = Math.round((goal.currentAmount / goal.targetAmount) * 100)
@@ -184,8 +238,26 @@ export default function Dashboard() {
                 )
               })}
             </div>
-          </motion.div>
-        )}
+          ) : (
+            <Card padding="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center shrink-0">
+                  <Target className="w-5 h-5 text-brand-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Crie sua primeira meta</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Definam objetivos financeiros juntos</p>
+                </div>
+                <button
+                  onClick={() => navigate('/app/budgets/new')}
+                  className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-semibold"
+                >
+                  Criar
+                </button>
+              </div>
+            </Card>
+          )}
+        </motion.div>
 
         {/* Recent Transactions */}
         <motion.div variants={itemVariants}>

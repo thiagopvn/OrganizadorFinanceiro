@@ -101,6 +101,30 @@ const useStore = create((set, get) => ({
     return totals
   },
 
+  // Budgets with spent calculated from current month transactions
+  getBudgetsWithSpent: () => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    const transactions = get().transactions
+    const budgets = get().budgets
+
+    // Calculate spent per category for current month
+    const monthlySpent = {}
+    transactions.forEach(t => {
+      if (t.amount >= 0) return // only expenses
+      const d = t.date?.toDate ? t.date.toDate() : (t.date instanceof Date ? t.date : new Date(t.date || t.createdAt?.toDate?.() || t.createdAt))
+      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+        monthlySpent[t.category] = (monthlySpent[t.category] || 0) + Math.abs(t.amount)
+      }
+    })
+
+    return budgets.map(b => ({
+      ...b,
+      spent: monthlySpent[b.category] || 0
+    }))
+  },
+
   // Reset all data on logout
   reset: () => set({
     user: null, userProfile: null, couple: null, partner: null, coupleId: null,

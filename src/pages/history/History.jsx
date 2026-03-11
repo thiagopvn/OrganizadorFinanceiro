@@ -8,11 +8,12 @@ import * as LucideIcons from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, Input } from '../../components/ui'
 import useStore from '../../lib/store'
-import { formatCurrency, formatDate, CATEGORIES, CATEGORY_LIST, getProgressColor, getProgressTextColor, groupByDate } from '../../lib/utils'
+import { formatCurrency, formatDate, CATEGORIES, CATEGORY_LIST, getProgressColor, getProgressTextColor, groupByDate, toDate } from '../../lib/utils'
 
 export default function History() {
   const navigate = useNavigate()
-  const { transactions, budgets, privacyMode, user, partner } = useStore()
+  const { transactions, privacyMode, user, partner, getBudgetsWithSpent } = useStore()
+  const budgets = getBudgetsWithSpent()
 
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState(new Date())
@@ -31,7 +32,7 @@ export default function History() {
   // Transactions for the current month
   const monthTransactions = useMemo(() => {
     return transactions.filter(t => {
-      const d = t.date ? new Date(t.date) : new Date(t.createdAt)
+      const d = toDate(t.date || t.createdAt)
       return isSameMonth(d, currentMonth)
     })
   }, [transactions, currentMonth])
@@ -40,7 +41,7 @@ export default function History() {
   const daysWithTransactions = useMemo(() => {
     const days = new Set()
     monthTransactions.forEach(t => {
-      const d = t.date ? new Date(t.date) : new Date(t.createdAt)
+      const d = toDate(t.date || t.createdAt)
       days.add(format(d, 'yyyy-MM-dd'))
     })
     return days
@@ -49,7 +50,7 @@ export default function History() {
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
     let filtered = viewAll ? monthTransactions : transactions.filter(t => {
-      const d = t.date ? new Date(t.date) : new Date(t.createdAt)
+      const d = toDate(t.date || t.createdAt)
       return isSameDay(d, selectedDay)
     })
 
@@ -366,7 +367,7 @@ export default function History() {
                         const IconComponent = getCategoryIcon(transaction.category)
                         const isExpense = transaction.amount < 0
                         const transactionTime = format(
-                          transaction.date ? new Date(transaction.date) : new Date(transaction.createdAt),
+                          toDate(transaction.date || transaction.createdAt),
                           'HH:mm'
                         )
 

@@ -1,19 +1,23 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Share2, Send, Smile, MessageCircle } from 'lucide-react'
+import { Share2, Send, Smile, MessageCircle, Trash2 } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { PageHeader } from '../../components/layout'
 import { Card, Badge, Avatar } from '../../components/ui'
 import useStore from '../../lib/store'
-import { formatCurrency, formatDateTime, CATEGORIES } from '../../lib/utils'
+import { formatCurrency, formatDateTime, CATEGORIES, toDate } from '../../lib/utils'
+import { deleteTransaction } from '../../lib/firebase'
 
 export default function TransactionDetail() {
   const { id } = useParams()
-  const { transactions, privacyMode, user, partner } = useStore()
+  const navigate = useNavigate()
+  const { transactions, privacyMode, user, partner, coupleId } = useStore()
   const [commentText, setCommentText] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const commentsEndRef = useRef(null)
 
   const transaction = useMemo(() => {
@@ -44,7 +48,20 @@ export default function TransactionDetail() {
   const cat = CATEGORIES[transaction.category] || CATEGORIES.outros
   const IconComponent = LucideIcons[cat.icon] || LucideIcons.MoreHorizontal
   const isExpense = transaction.amount < 0
-  const transactionDate = transaction.date ? new Date(transaction.date) : new Date(transaction.createdAt)
+  const transactionDate = toDate(transaction.date || transaction.createdAt)
+
+  const handleDelete = async () => {
+    if (!coupleId) return
+    setDeleting(true)
+    try {
+      await deleteTransaction(coupleId, transaction.id)
+      navigate(-1)
+    } catch (e) {
+      console.error('Erro ao deletar transação:', e)
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
 
   const handleSendComment = () => {
     if (!commentText.trim()) return
@@ -84,19 +101,28 @@ export default function TransactionDetail() {
       <PageHeader
         title="Detalhe da Transação"
         actions={
-          <button
-            onClick={() => {
-              if (navigator.share) {
-                navigator.share({
-                  title: transaction.description,
-                  text: `${transaction.description}: ${formatCurrency(transaction.amount)}`
-                }).catch(() => {})
-              }
-            }}
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-          >
-            <Share2 className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors"
+              aria-label="Excluir transação"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: transaction.description,
+                    text: `${transaction.description}: ${formatCurrency(transaction.amount)}`
+                  }).catch(() => {})
+                }
+              }}
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+          </div>
         }
       />
 
@@ -267,6 +293,43 @@ export default function TransactionDetail() {
           </motion.button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-6">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-xl"
+          >
+            <div className="w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white text-center mb-2">
+              Excluir transação?
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
+              "{transaction.description}" de {formatCurrency(transaction.amount)} será removida permanentemente.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Excluindo...' : 'Excluir'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }

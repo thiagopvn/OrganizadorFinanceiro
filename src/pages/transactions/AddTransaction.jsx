@@ -6,7 +6,7 @@ import {
   Heart, GraduationCap, ShoppingBag, CreditCard, TrendingUp,
   Wallet, Briefcase, Gift, Plane, MoreHorizontal
 } from 'lucide-react'
-import { Button, Toggle, TabBar } from '../../components/ui'
+import { Button, Toggle, TabBar, Avatar } from '../../components/ui'
 import useStore from '../../lib/store'
 import { addTransaction } from '../../lib/firebase'
 import { CATEGORY_LIST, CATEGORIES, formatCurrency } from '../../lib/utils'
@@ -25,12 +25,16 @@ const NUM_KEYS = [
 ]
 
 export default function AddTransaction({ onClose }) {
-  const { user, coupleId, setShowSuccess } = useStore()
+  const { user, partner, coupleId, setShowSuccess } = useStore()
   const [amountStr, setAmountStr] = useState('0')
   const [category, setCategory] = useState('mercado')
   const [isShared, setIsShared] = useState(true)
   const [tab, setTab] = useState('expense')
+  const [paidBy, setPaidBy] = useState('user') // 'user' or 'partner'
   const [saving, setSaving] = useState(false)
+
+  const userName = user?.displayName || 'Eu'
+  const partnerName = partner?.displayName || 'Parceiro(a)'
 
   const parsedAmount = parseFloat(amountStr) || 0
   const displayAmount = formatCurrency(parsedAmount / 100)
@@ -57,14 +61,17 @@ export default function AddTransaction({ onClose }) {
     const signedAmount = tab === 'expense' ? -Math.abs(finalAmount) : Math.abs(finalAmount)
     const cat = CATEGORIES[category]
 
+    const selectedUid = paidBy === 'partner' && partner ? partner.uid : user.uid
+    const selectedName = paidBy === 'partner' && partner ? (partner.displayName || 'Parceiro(a)') : (user.displayName || 'Eu')
+
     try {
       await addTransaction(coupleId, {
         description: cat?.label || 'Transação',
         amount: signedAmount,
         category,
         date: new Date(),
-        paidBy: user.uid,
-        paidByName: user.displayName || 'Eu',
+        paidBy: selectedUid,
+        paidByName: selectedName,
         isShared,
         splitType: 'equal',
         merchant: '',
@@ -80,6 +87,7 @@ export default function AddTransaction({ onClose }) {
       setCategory('mercado')
       setIsShared(true)
       setTab('expense')
+      setPaidBy('user')
     } catch (err) {
       console.error('Erro ao salvar transação:', err)
       alert('Erro ao salvar. Tente novamente.')
@@ -153,6 +161,39 @@ export default function AddTransaction({ onClose }) {
         label="Despesa Conjunta"
         description="Dividir entre o casal"
       />
+
+      {/* Who paid selector */}
+      <div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">Quem pagou?</p>
+        <div className="flex gap-2">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setPaidBy('user')}
+            className={`flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              paidBy === 'user'
+                ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+            }`}
+          >
+            <Avatar name={userName} size="sm" className={`w-6 h-6 text-[9px] ${paidBy === 'user' ? 'ring-2 ring-white/50' : ''}`} />
+            {userName}
+          </motion.button>
+          {partner && (
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setPaidBy('partner')}
+              className={`flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                paidBy === 'partner'
+                  ? 'bg-violet-500 text-white shadow-md shadow-violet-500/25'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+              }`}
+            >
+              <Avatar name={partnerName} size="sm" className={`w-6 h-6 text-[9px] ${paidBy === 'partner' ? 'ring-2 ring-white/50' : ''}`} />
+              {partnerName}
+            </motion.button>
+          )}
+        </div>
+      </div>
 
       {/* Number Pad */}
       <div className="grid grid-cols-3 gap-2.5">

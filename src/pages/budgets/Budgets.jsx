@@ -10,7 +10,8 @@ import { formatCurrency, CATEGORIES, getProgressColor, getProgressTextColor } fr
 
 export default function Budgets() {
   const navigate = useNavigate()
-  const { budgets, goals, privacyMode } = useStore()
+  const { goals, privacyMode, getBudgetsWithSpent } = useStore()
+  const budgets = getBudgetsWithSpent()
   const [period, setPeriod] = useState('monthly')
 
   const periodTabs = [
