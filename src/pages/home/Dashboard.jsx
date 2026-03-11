@@ -38,21 +38,25 @@ export default function Dashboard() {
   const {
     transactions, goals, notifications,
     privacyMode, togglePrivacyMode,
-    getNetWorth, getBalance, getBudgetsWithSpent, user, partner
+    getNetWorth, getBalance, getGoalsWithProgress, user, partner
   } = useStore()
 
-  const budgets = getBudgetsWithSpent()
+  const allGoals = getGoalsWithProgress()
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
   const balance = getBalance()
   const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions])
 
-  // Budget alerts - categories approaching or over limit
+  // Budget alerts - expense limits approaching or over
   const budgetAlerts = useMemo(() => {
-    return budgets
-      .map(b => ({ ...b, percent: b.limit > 0 ? Math.round((b.spent / b.limit) * 100) : 0 }))
-      .filter(b => b.percent >= 70)
+    return allGoals
+      .filter(g => g.type === 'expense_limit' && g.percent >= 70)
       .sort((a, b) => b.percent - a.percent)
-  }, [budgets])
+  }, [allGoals])
+
+  // Goals for carousel (savings + income goals)
+  const dashboardGoals = useMemo(() => {
+    return allGoals.filter(g => g.type !== 'expense_limit')
+  }, [allGoals])
 
   const displayValue = (value) => {
     if (privacyMode) return 'R$ ••••••'
@@ -162,7 +166,7 @@ export default function Dashboard() {
           <motion.div variants={itemVariants}>
             <SectionHeader
               title="Alertas de Orçamento"
-              action="Ver orçamentos"
+              action="Ver metas"
               onAction={() => navigate('/app/budgets')}
             />
             <div className="space-y-2">
@@ -181,14 +185,14 @@ export default function Dashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{cat.label}</p>
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{alert.name}</p>
                           <span className={`text-xs font-bold ${getProgressTextColor(alert.percent)}`}>
                             {alert.percent}%
                           </span>
                         </div>
-                        <ProgressBar value={alert.spent} max={alert.limit} size="sm" />
+                        <ProgressBar value={alert.currentAmount} max={alert.targetAmount} size="sm" />
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                          {privacyMode ? '••••' : formatCurrency(alert.spent)} de {privacyMode ? '••••' : formatCurrency(alert.limit)}
+                          {privacyMode ? '••••' : formatCurrency(alert.currentAmount)} de {privacyMode ? '••••' : formatCurrency(alert.targetAmount)}
                           {isOver && ' — Limite ultrapassado!'}
                         </p>
                       </div>
@@ -200,18 +204,19 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Shared Goals */}
+        {/* Shared Goals (income + savings) */}
         <motion.div variants={itemVariants}>
           <SectionHeader
-            title="Metas Compartilhadas"
-            action={goals.length > 0 ? "Ver todas" : "Criar meta"}
-            onAction={() => navigate(goals.length > 0 ? '/app/budgets' : '/app/budgets/new')}
+            title="Metas"
+            action={allGoals.length > 0 ? "Ver todas" : "Criar meta"}
+            onAction={() => navigate(allGoals.length > 0 ? '/app/budgets' : '/app/budgets/new')}
           />
-          {goals.length > 0 ? (
+          {dashboardGoals.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-              {goals.map((goal) => {
-                const percent = Math.round((goal.currentAmount / goal.targetAmount) * 100)
+              {dashboardGoals.map((goal) => {
                 const GoalIcon = ICON_MAP[goal.icon] || Wallet
+                const isSavings = goal.type === 'savings'
+                const barColor = isSavings ? 'bg-violet-500' : 'bg-emerald-500'
 
                 return (
                   <motion.div
@@ -220,8 +225,10 @@ export default function Dashboard() {
                     onClick={() => navigate(`/app/budgets/${goal.id}`)}
                     className="min-w-[160px] bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700/50 cursor-pointer shrink-0"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center mb-3">
-                      <GoalIcon className="w-4.5 h-4.5 text-brand-500" />
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${
+                      isSavings ? 'bg-violet-50 dark:bg-violet-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'
+                    }`}>
+                      <GoalIcon className={`w-4.5 h-4.5 ${isSavings ? 'text-violet-500' : 'text-emerald-500'}`} />
                     </div>
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1 truncate">{goal.name}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mb-2.5">
@@ -231,9 +238,9 @@ export default function Dashboard() {
                       value={goal.currentAmount}
                       max={goal.targetAmount}
                       size="sm"
-                      color="bg-brand-500"
+                      color={barColor}
                     />
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">{percent}% concluído</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 font-medium">{goal.percent}%</p>
                   </motion.div>
                 )
               })}
@@ -246,7 +253,7 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Crie sua primeira meta</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Definam objetivos financeiros juntos</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Limites, receitas ou poupança</p>
                 </div>
                 <button
                   onClick={() => navigate('/app/budgets/new')}

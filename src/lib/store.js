@@ -109,10 +109,9 @@ const useStore = create((set, get) => ({
     const transactions = get().transactions
     const budgets = get().budgets
 
-    // Calculate spent per category for current month
     const monthlySpent = {}
     transactions.forEach(t => {
-      if (t.amount >= 0) return // only expenses
+      if (t.amount >= 0) return
       const d = t.date?.toDate ? t.date.toDate() : (t.date instanceof Date ? t.date : new Date(t.date || t.createdAt?.toDate?.() || t.createdAt))
       if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
         monthlySpent[t.category] = (monthlySpent[t.category] || 0) + Math.abs(t.amount)
@@ -123,6 +122,64 @@ const useStore = create((set, get) => ({
       ...b,
       spent: monthlySpent[b.category] || 0
     }))
+  },
+
+  // All goals with progress computed from transactions
+  getGoalsWithProgress: () => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    const transactions = get().transactions
+    const goals = get().goals
+    const budgets = get().budgets
+
+    // Monthly expenses per category
+    const monthlyExpenses = {}
+    // Monthly income per category
+    const monthlyIncome = {}
+
+    transactions.forEach(t => {
+      const d = t.date?.toDate ? t.date.toDate() : (t.date instanceof Date ? t.date : new Date(t.date || t.createdAt?.toDate?.() || t.createdAt))
+      if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) return
+      if (t.amount < 0) {
+        monthlyExpenses[t.category] = (monthlyExpenses[t.category] || 0) + Math.abs(t.amount)
+      } else {
+        monthlyIncome[t.category] = (monthlyIncome[t.category] || 0) + t.amount
+      }
+    })
+
+    // Process goals from goals subcollection
+    const processedGoals = goals.map(g => {
+      const type = g.type || 'savings'
+      let currentAmount = 0
+
+      if (type === 'expense_limit') {
+        currentAmount = monthlyExpenses[g.category] || 0
+      } else if (type === 'income_goal') {
+        currentAmount = monthlyIncome[g.category] || 0
+      } else {
+        // savings - use stored currentAmount
+        currentAmount = g.currentAmount || 0
+      }
+
+      const percent = g.targetAmount > 0 ? Math.round((currentAmount / g.targetAmount) * 100) : 0
+
+      return { ...g, currentAmount, percent }
+    })
+
+    // Also include legacy budgets as expense_limit type
+    const legacyBudgets = budgets
+      .filter(b => !goals.some(g => g.category === b.category && g.type === 'expense_limit'))
+      .map(b => ({
+        ...b,
+        type: 'expense_limit',
+        name: b.name || `Limite ${b.category || 'Gasto'}`,
+        targetAmount: b.limit || 0,
+        currentAmount: monthlyExpenses[b.category] || 0,
+        percent: b.limit > 0 ? Math.round(((monthlyExpenses[b.category] || 0) / b.limit) * 100) : 0
+      }))
+
+    return [...processedGoals, ...legacyBudgets]
   },
 
   // Reset all data on logout
