@@ -1,5 +1,5 @@
 /**
- * extras.js - Cloud Functions adicionais para o Unity Finance
+ * extras.js - Cloud Functions adicionais para o Unity Finance (v1 API)
  *
  * Contém:
  * 1. sendPartnerInvite / joinCouple - Convite e entrada de parceiro no casal
@@ -7,8 +7,7 @@
  * 3. yearlyWrapped - Resumo financeiro anual do casal (Unity Wrapped)
  */
 
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
+const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 
@@ -39,21 +38,21 @@ const db = admin.firestore();
  * - Armazena convite no Firestore com expiração de 7 dias
  * - Retorna link de convite
  */
-const sendPartnerInvite = onCall(async (request) => {
+const sendPartnerInvite = functions.https.onCall(async (data, context) => {
   // Verificação de autenticação
-  if (!request.auth) {
-    throw new HttpsError(
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
       "unauthenticated",
       "Você precisa estar autenticado para enviar um convite."
     );
   }
 
-  const { email, coupleId } = request.data;
-  const callerId = request.auth.uid;
+  const { email, coupleId } = data;
+  const callerId = context.auth.uid;
 
   // Validação dos parâmetros obrigatórios
   if (!email || !coupleId) {
-    throw new HttpsError(
+    throw new functions.https.HttpsError(
       "invalid-argument",
       "Os campos 'email' e 'coupleId' são obrigatórios."
     );
@@ -62,7 +61,7 @@ const sendPartnerInvite = onCall(async (request) => {
   // Validação de formato de email básica
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    throw new HttpsError(
+    throw new functions.https.HttpsError(
       "invalid-argument",
       "O email informado não é válido."
     );
@@ -73,13 +72,13 @@ const sendPartnerInvite = onCall(async (request) => {
     const coupleDoc = await db.collection("couples").doc(coupleId).get();
 
     if (!coupleDoc.exists) {
-      throw new HttpsError("not-found", "Casal não encontrado.");
+      throw new functions.https.HttpsError("not-found", "Casal não encontrado.");
     }
 
     const coupleData = coupleDoc.data();
 
     if (!coupleData.partnerIds || !coupleData.partnerIds.includes(callerId)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "permission-denied",
         "Você não é membro deste casal."
       );
@@ -87,7 +86,7 @@ const sendPartnerInvite = onCall(async (request) => {
 
     // Verifica se o casal já está completo
     if (coupleData.partnerIds.length >= 2) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "failed-precondition",
         "Este casal já possui dois parceiros."
       );
@@ -132,11 +131,11 @@ const sendPartnerInvite = onCall(async (request) => {
     };
   } catch (error) {
     // Re-lança HttpsErrors para que o cliente receba a mensagem correta
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
       throw error;
     }
     console.error("[Convite] Erro ao enviar convite:", error);
-    throw new HttpsError("internal", "Erro interno ao processar o convite.");
+    throw new functions.https.HttpsError("internal", "Erro interno ao processar o convite.");
   }
 });
 
@@ -149,20 +148,20 @@ const sendPartnerInvite = onCall(async (request) => {
  * - Atualiza coupleId do usuário
  * - Marca o convite como aceito
  */
-const joinCouple = onCall(async (request) => {
+const joinCouple = functions.https.onCall(async (data, context) => {
   // Verificação de autenticação
-  if (!request.auth) {
-    throw new HttpsError(
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
       "unauthenticated",
       "Você precisa estar autenticado para aceitar um convite."
     );
   }
 
-  const { token } = request.data;
-  const userId = request.auth.uid;
+  const { token } = data;
+  const userId = context.auth.uid;
 
   if (!token) {
-    throw new HttpsError(
+    throw new functions.https.HttpsError(
       "invalid-argument",
       "O campo 'token' é obrigatório."
     );
@@ -173,14 +172,14 @@ const joinCouple = onCall(async (request) => {
     const inviteDoc = await db.collection("invites").doc(token).get();
 
     if (!inviteDoc.exists) {
-      throw new HttpsError("not-found", "Convite não encontrado.");
+      throw new functions.https.HttpsError("not-found", "Convite não encontrado.");
     }
 
     const inviteData = inviteDoc.data();
 
     // Verifica se o convite já foi utilizado
     if (inviteData.status !== "pending") {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "failed-precondition",
         `Este convite já foi ${inviteData.status === "accepted" ? "aceito" : "utilizado"}.`
       );
@@ -193,7 +192,7 @@ const joinCouple = onCall(async (request) => {
     if (now > expiresAt) {
       // Atualiza o status para expirado
       await db.collection("invites").doc(token).update({ status: "expired" });
-      throw new HttpsError("deadline-exceeded", "Este convite já expirou.");
+      throw new functions.https.HttpsError("deadline-exceeded", "Este convite já expirou.");
     }
 
     const { coupleId } = inviteData;
@@ -202,7 +201,7 @@ const joinCouple = onCall(async (request) => {
     const coupleDoc = await db.collection("couples").doc(coupleId).get();
 
     if (!coupleDoc.exists) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "not-found",
         "O casal associado a este convite não foi encontrado."
       );
@@ -211,7 +210,7 @@ const joinCouple = onCall(async (request) => {
     const coupleData = coupleDoc.data();
 
     if (coupleData.partnerIds.length >= 2) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "failed-precondition",
         "Este casal já possui dois parceiros."
       );
@@ -219,7 +218,7 @@ const joinCouple = onCall(async (request) => {
 
     // Verifica se o usuário não está tentando entrar em seu próprio casal
     if (coupleData.partnerIds.includes(userId)) {
-      throw new HttpsError(
+      throw new functions.https.HttpsError(
         "already-exists",
         "Você já é membro deste casal."
       );
@@ -279,11 +278,11 @@ const joinCouple = onCall(async (request) => {
       coupleId,
     };
   } catch (error) {
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
       throw error;
     }
     console.error("[Convite] Erro ao aceitar convite:", error);
-    throw new HttpsError("internal", "Erro interno ao processar o convite.");
+    throw new functions.https.HttpsError("internal", "Erro interno ao processar o convite.");
   }
 });
 
@@ -301,12 +300,10 @@ const joinCouple = onCall(async (request) => {
  *   - Atualiza nextBillingDate de assinaturas vencidas
  *   - Cria notificações para ambos os parceiros
  */
-const subscriptionAlerts = onSchedule(
-  {
-    schedule: "every day 10:00",
-    timeZone: "America/Sao_Paulo",
-  },
-  async () => {
+const subscriptionAlerts = functions.pubsub
+  .schedule("every day 10:00")
+  .timeZone("America/Sao_Paulo")
+  .onRun(async (context) => {
     console.log("[Assinaturas] Iniciando verificação diária de assinaturas...");
 
     try {
@@ -492,8 +489,7 @@ const subscriptionAlerts = onSchedule(
       );
       throw error;
     }
-  }
-);
+  });
 
 // ============================================================================
 // 3. UNITY WRAPPED ANUAL (CRON - 28 DE DEZEMBRO ÀS 10h BRT)
@@ -509,12 +505,10 @@ const subscriptionAlerts = onSchedule(
  *   - Compara com o ano anterior
  *   - Armazena o documento wrapped e notifica os parceiros
  */
-const yearlyWrapped = onSchedule(
-  {
-    schedule: "28 of december 10:00",
-    timeZone: "America/Sao_Paulo",
-  },
-  async () => {
+const yearlyWrapped = functions.pubsub
+  .schedule("28 of december 10:00")
+  .timeZone("America/Sao_Paulo")
+  .onRun(async (context) => {
     const currentYear = new Date().getFullYear();
     console.log(
       `[Wrapped] Iniciando geração do Unity Wrapped ${currentYear}...`
@@ -789,8 +783,7 @@ const yearlyWrapped = onSchedule(
       console.error("[Wrapped] Erro durante a geração do yearly wrapped:", error);
       throw error;
     }
-  }
-);
+  });
 
 module.exports = {
   sendPartnerInvite,

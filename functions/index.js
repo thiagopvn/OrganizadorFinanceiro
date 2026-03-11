@@ -1,14 +1,11 @@
 /**
- * Unity Finance — Cloud Functions
+ * Unity Finance — Cloud Functions (v1 API)
  *
  * Funções serverless para o app de gestão financeira para casais.
  * Inclui triggers do Firestore, Storage e tarefas agendadas (CRON).
  */
 
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onObjectFinalized } = require("firebase-functions/v2/storage");
-const { logger } = require("firebase-functions");
+const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const vision = require("@google-cloud/vision");
 
@@ -44,7 +41,7 @@ function formatCurrency(value) {
  */
 async function sendPushNotification(tokens, title, body) {
   if (!tokens || tokens.length === 0) {
-    logger.warn("Nenhum token FCM disponível para envio de notificação.");
+    functions.logger.warn("Nenhum token FCM disponível para envio de notificação.");
     return;
   }
 
@@ -62,17 +59,17 @@ async function sendPushNotification(tokens, title, body) {
     if (response.failureCount > 0) {
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
-          logger.warn(
+          functions.logger.warn(
             `Falha ao enviar para token ${validTokens[idx]}: ${resp.error?.message}`
           );
         }
       });
     }
-    logger.info(
+    functions.logger.info(
       `Notificação enviada — sucesso: ${response.successCount}, falhas: ${response.failureCount}`
     );
   } catch (error) {
-    logger.error("Erro ao enviar notificação push:", error);
+    functions.logger.error("Erro ao enviar notificação push:", error);
   }
 }
 
@@ -155,19 +152,18 @@ function getMonthName(monthIndex) {
  *  - Verificar se ultrapassou algum limiar de alerta (50%, 80%, 100%).
  *  - Notificar o parceiro sobre a nova despesa.
  */
-exports.onTransactionCreate = onDocumentCreated(
-  "couples/{coupleId}/transactions/{transactionId}",
-  async (event) => {
-    const snap = event.data;
+exports.onTransactionCreate = functions.firestore
+  .document("couples/{coupleId}/transactions/{transactionId}")
+  .onCreate(async (snap, context) => {
     if (!snap) {
-      logger.warn("Evento sem dados — ignorando.");
+      functions.logger.warn("Evento sem dados — ignorando.");
       return null;
     }
 
     const transaction = snap.data();
-    const { coupleId } = event.params;
+    const { coupleId } = context.params;
 
-    logger.info(
+    functions.logger.info(
       `Nova transação criada para o casal ${coupleId}: ${JSON.stringify(transaction)}`
     );
 
@@ -175,7 +171,7 @@ exports.onTransactionCreate = onDocumentCreated(
       // Buscar dados do casal
       const coupleSnap = await db.collection("couples").doc(coupleId).get();
       if (!coupleSnap.exists) {
-        logger.error(`Casal ${coupleId} não encontrado.`);
+        functions.logger.error(`Casal ${coupleId} não encontrado.`);
         return null;
       }
       const coupleData = coupleSnap.data();
@@ -212,7 +208,7 @@ exports.onTransactionCreate = onDocumentCreated(
             spent: admin.firestore.FieldValue.increment(absAmount),
           });
 
-          logger.info(
+          functions.logger.info(
             `Orçamento "${transaction.category}" atualizado: ${oldSpent} → ${newSpent} (limite: ${limit})`
           );
 
@@ -259,13 +255,13 @@ exports.onTransactionCreate = onDocumentCreated(
               );
               await Promise.all(notificationPromises);
 
-              logger.info(
+              functions.logger.info(
                 `Alerta de orçamento (${threshold}%) enviado para o casal ${coupleId}.`
               );
             }
           }
         } else {
-          logger.info(
+          functions.logger.info(
             `Nenhum orçamento encontrado para a categoria "${transaction.category}".`
           );
         }
@@ -301,7 +297,7 @@ exports.onTransactionCreate = onDocumentCreated(
             message: notifBody,
           });
 
-          logger.info(
+          functions.logger.info(
             `Notificação de nova despesa enviada para o parceiro ${otherPartner}.`
           );
         }
@@ -309,11 +305,10 @@ exports.onTransactionCreate = onDocumentCreated(
 
       return null;
     } catch (error) {
-      logger.error("Erro no onTransactionCreate:", error);
+      functions.logger.error("Erro no onTransactionCreate:", error);
       return null;
     }
-  }
-);
+  });
 
 // ---------------------------------------------------------------------------
 // 2. predictiveBudgetAlert — CRON diário às 09:00 BRT
@@ -326,13 +321,11 @@ exports.onTransactionCreate = onDocumentCreated(
  * se o gasto irá ultrapassar o limite até o fim do mês. Envia alertas
  * preditivos quando necessário.
  */
-exports.predictiveBudgetAlert = onSchedule(
-  {
-    schedule: "every day 09:00",
-    timeZone: "America/Sao_Paulo",
-  },
-  async () => {
-    logger.info("Iniciando verificação preditiva de orçamentos.");
+exports.predictiveBudgetAlert = functions.pubsub
+  .schedule("every day 09:00")
+  .timeZone("America/Sao_Paulo")
+  .onRun(async (context) => {
+    functions.logger.info("Iniciando verificação preditiva de orçamentos.");
 
     try {
       const couplesSnap = await db.collection("couples").get();
@@ -396,7 +389,7 @@ exports.predictiveBudgetAlert = onSchedule(
                 ? `No ritmo atual, vocês vão estourar a meta de ${budget.category} em ${daysUntilLimit} dias.`
                 : `O orçamento de ${budget.category} já ultrapassou o limite de ${formatCurrency(limit)}.`;
 
-            logger.info(
+            functions.logger.info(
               `Alerta preditivo para casal ${coupleId} — categoria "${budget.category}": ` +
               `gasto ${formatCurrency(spent)}, projeção ${formatCurrency(projectedTotal)}, ` +
               `limite ${formatCurrency(limit)}, dias restantes: ${daysRemaining}.`
@@ -420,12 +413,11 @@ exports.predictiveBudgetAlert = onSchedule(
         }
       }
 
-      logger.info("Verificação preditiva de orçamentos concluída.");
+      functions.logger.info("Verificação preditiva de orçamentos concluída.");
     } catch (error) {
-      logger.error("Erro no predictiveBudgetAlert:", error);
+      functions.logger.error("Erro no predictiveBudgetAlert:", error);
     }
-  }
-);
+  });
 
 // ---------------------------------------------------------------------------
 // 3. monthlySettlement — CRON no dia 1 de cada mês às 08:00 BRT
@@ -438,13 +430,11 @@ exports.predictiveBudgetAlert = onSchedule(
  * transações compartilhadas do mês anterior, respeitando o splitRatio
  * definido pelo casal.
  */
-exports.monthlySettlement = onSchedule(
-  {
-    schedule: "1 of month 08:00",
-    timeZone: "America/Sao_Paulo",
-  },
-  async () => {
-    logger.info("Iniciando cálculo de acerto mensal.");
+exports.monthlySettlement = functions.pubsub
+  .schedule("1 of month 08:00")
+  .timeZone("America/Sao_Paulo")
+  .onRun(async (context) => {
+    functions.logger.info("Iniciando cálculo de acerto mensal.");
 
     try {
       const couplesSnap = await db.collection("couples").get();
@@ -456,7 +446,7 @@ exports.monthlySettlement = onSchedule(
         const splitRatio = coupleData.splitRatio || {};
 
         if (partnerIds.length < 2) {
-          logger.warn(
+          functions.logger.warn(
             `Casal ${coupleId} possui menos de 2 parceiros — ignorando.`
           );
           continue;
@@ -469,7 +459,7 @@ exports.monthlySettlement = onSchedule(
 
         const periodLabel = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`;
 
-        logger.info(
+        functions.logger.info(
           `Processando acerto do casal ${coupleId} para o período ${periodLabel}.`
         );
 
@@ -484,7 +474,7 @@ exports.monthlySettlement = onSchedule(
           .get();
 
         if (txSnap.empty) {
-          logger.info(
+          functions.logger.info(
             `Nenhuma transação compartilhada encontrada para o casal ${coupleId} em ${periodLabel}.`
           );
           continue;
@@ -543,7 +533,7 @@ exports.monthlySettlement = onSchedule(
           netAmount = Math.round(Math.abs(balanceA) * 100) / 100;
         } else {
           // Saldo zero — nenhum acerto necessário
-          logger.info(`Casal ${coupleId}: saldos zerados em ${periodLabel}.`);
+          functions.logger.info(`Casal ${coupleId}: saldos zerados em ${periodLabel}.`);
           continue;
         }
 
@@ -571,7 +561,7 @@ exports.monthlySettlement = onSchedule(
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
-        logger.info(
+        functions.logger.info(
           `Acerto criado para o casal ${coupleId}: ${fromUser} deve ${formatCurrency(netAmount)} a ${toUser}.`
         );
 
@@ -596,12 +586,11 @@ exports.monthlySettlement = onSchedule(
         await Promise.all(notifPromises);
       }
 
-      logger.info("Cálculo de acerto mensal concluído.");
+      functions.logger.info("Cálculo de acerto mensal concluído.");
     } catch (error) {
-      logger.error("Erro no monthlySettlement:", error);
+      functions.logger.error("Erro no monthlySettlement:", error);
     }
-  }
-);
+  });
 
 // ---------------------------------------------------------------------------
 // 4. processReceiptOCR — Trigger do Cloud Storage
@@ -813,165 +802,159 @@ function categorizeByMerchant(merchantName) {
  * Usa a API do Google Cloud Vision para OCR e extrai dados da nota fiscal,
  * atualizando a transação correspondente.
  */
-exports.processReceiptOCR = onObjectFinalized(
-  {
-    // Processar apenas arquivos dentro do prefixo "receipts/"
-    bucket: undefined, // bucket padrão do projeto
-  },
-  async (event) => {
-    const filePath = event.data.name;
-    const contentType = event.data.contentType;
+exports.processReceiptOCR = functions.storage.object().onFinalize(async (object) => {
+  const filePath = object.name;
+  const contentType = object.contentType;
 
-    // Verificar se o arquivo está no caminho esperado
-    if (!filePath || !filePath.startsWith("receipts/")) {
-      logger.info(`Arquivo fora do escopo (${filePath}) — ignorando.`);
+  // Verificar se o arquivo está no caminho esperado
+  if (!filePath || !filePath.startsWith("receipts/")) {
+    functions.logger.info(`Arquivo fora do escopo (${filePath}) — ignorando.`);
+    return null;
+  }
+
+  // Validar tipo de conteúdo (apenas imagens e PDFs)
+  if (contentType && !contentType.startsWith("image/") && contentType !== "application/pdf") {
+    functions.logger.info(`Tipo de arquivo não suportado (${contentType}) — ignorando.`);
+    return null;
+  }
+
+  // Extrair coupleId e transactionId do caminho
+  const pathParts = filePath.split("/");
+  // Esperado: receipts/{coupleId}/{transactionId}/{filename}
+  if (pathParts.length < 4) {
+    functions.logger.warn(`Caminho inesperado: ${filePath} — ignorando.`);
+    return null;
+  }
+
+  const coupleId = pathParts[1];
+  const transactionId = pathParts[2];
+
+  functions.logger.info(
+    `Processando nota fiscal: casal=${coupleId}, transação=${transactionId}, arquivo=${filePath}`
+  );
+
+  try {
+    // Obter referência ao arquivo no Storage
+    const bucket = admin.storage().bucket(object.bucket);
+    const file = bucket.file(filePath);
+
+    // Baixar o arquivo para um buffer temporário
+    const [fileBuffer] = await file.download();
+
+    // Usar Google Cloud Vision para OCR
+    const client = new vision.ImageAnnotatorClient();
+    const [result] = await client.textDetection({
+      image: { content: fileBuffer },
+    });
+
+    const detections = result.textAnnotations;
+    if (!detections || detections.length === 0) {
+      functions.logger.warn(`Nenhum texto detectado na nota fiscal: ${filePath}`);
       return null;
     }
 
-    // Validar tipo de conteúdo (apenas imagens e PDFs)
-    if (contentType && !contentType.startsWith("image/") && contentType !== "application/pdf") {
-      logger.info(`Tipo de arquivo não suportado (${contentType}) — ignorando.`);
-      return null;
-    }
+    // O primeiro resultado contém todo o texto detectado
+    const fullText = detections[0].description || "";
+    functions.logger.info(`Texto OCR extraído (${fullText.length} caracteres).`);
 
-    // Extrair coupleId e transactionId do caminho
-    const pathParts = filePath.split("/");
-    // Esperado: receipts/{coupleId}/{transactionId}/{filename}
-    if (pathParts.length < 4) {
-      logger.warn(`Caminho inesperado: ${filePath} — ignorando.`);
-      return null;
-    }
+    // Extrair dados da nota fiscal
+    const extractedAmount = extractTotalAmount(fullText);
+    const extractedMerchant = extractMerchant(fullText);
+    const extractedDate = extractDate(fullText);
+    const extractedCategory = categorizeByMerchant(extractedMerchant);
 
-    const coupleId = pathParts[1];
-    const transactionId = pathParts[2];
-
-    logger.info(
-      `Processando nota fiscal: casal=${coupleId}, transação=${transactionId}, arquivo=${filePath}`
+    functions.logger.info(
+      `Dados extraídos — valor: ${extractedAmount}, ` +
+      `estabelecimento: ${extractedMerchant}, ` +
+      `data: ${extractedDate}, ` +
+      `categoria: ${extractedCategory}`
     );
 
-    try {
-      // Obter referência ao arquivo no Storage
-      const bucket = admin.storage().bucket(event.data.bucket);
-      const file = bucket.file(filePath);
+    // Montar objeto de atualização (apenas campos que foram extraídos)
+    const updateData = {};
 
-      // Baixar o arquivo para um buffer temporário
-      const [fileBuffer] = await file.download();
+    if (extractedAmount !== null) {
+      // Despesas são negativas no sistema
+      updateData.amount = -Math.abs(extractedAmount);
+    }
+    if (extractedMerchant) {
+      updateData.merchant = extractedMerchant;
+    }
+    if (extractedCategory) {
+      updateData.category = extractedCategory;
+    }
+    if (extractedDate) {
+      updateData.date = admin.firestore.Timestamp.fromDate(extractedDate);
+    }
 
-      // Usar Google Cloud Vision para OCR
-      const client = new vision.ImageAnnotatorClient();
-      const [result] = await client.textDetection({
-        image: { content: fileBuffer },
-      });
+    // Adicionar descrição automática
+    if (extractedMerchant && extractedAmount !== null) {
+      updateData.description = `Compra em ${extractedMerchant} — ${formatCurrency(extractedAmount)}`;
+    } else if (extractedMerchant) {
+      updateData.description = `Compra em ${extractedMerchant}`;
+    }
 
-      const detections = result.textAnnotations;
-      if (!detections || detections.length === 0) {
-        logger.warn(`Nenhum texto detectado na nota fiscal: ${filePath}`);
-        return null;
-      }
-
-      // O primeiro resultado contém todo o texto detectado
-      const fullText = detections[0].description || "";
-      logger.info(`Texto OCR extraído (${fullText.length} caracteres).`);
-
-      // Extrair dados da nota fiscal
-      const extractedAmount = extractTotalAmount(fullText);
-      const extractedMerchant = extractMerchant(fullText);
-      const extractedDate = extractDate(fullText);
-      const extractedCategory = categorizeByMerchant(extractedMerchant);
-
-      logger.info(
-        `Dados extraídos — valor: ${extractedAmount}, ` +
-        `estabelecimento: ${extractedMerchant}, ` +
-        `data: ${extractedDate}, ` +
-        `categoria: ${extractedCategory}`
-      );
-
-      // Montar objeto de atualização (apenas campos que foram extraídos)
-      const updateData = {};
-
-      if (extractedAmount !== null) {
-        // Despesas são negativas no sistema
-        updateData.amount = -Math.abs(extractedAmount);
-      }
-      if (extractedMerchant) {
-        updateData.merchant = extractedMerchant;
-      }
-      if (extractedCategory) {
-        updateData.category = extractedCategory;
-      }
-      if (extractedDate) {
-        updateData.date = admin.firestore.Timestamp.fromDate(extractedDate);
-      }
-
-      // Adicionar descrição automática
-      if (extractedMerchant && extractedAmount !== null) {
-        updateData.description = `Compra em ${extractedMerchant} — ${formatCurrency(extractedAmount)}`;
-      } else if (extractedMerchant) {
-        updateData.description = `Compra em ${extractedMerchant}`;
-      }
-
-      // Atualizar documento da transação
-      if (Object.keys(updateData).length > 0) {
-        const txRef = db
-          .collection("couples")
-          .doc(coupleId)
-          .collection("transactions")
-          .doc(transactionId);
-
-        await txRef.update(updateData);
-
-        logger.info(
-          `Transação ${transactionId} atualizada com dados do OCR: ${JSON.stringify(updateData)}`
-        );
-      } else {
-        logger.warn(
-          `Nenhum dado útil extraído da nota fiscal ${filePath}.`
-        );
-      }
-
-      // Notificar o usuário que criou a transação
-      const txSnap = await db
+    // Atualizar documento da transação
+    if (Object.keys(updateData).length > 0) {
+      const txRef = db
         .collection("couples")
         .doc(coupleId)
         .collection("transactions")
-        .doc(transactionId)
-        .get();
+        .doc(transactionId);
 
-      if (txSnap.exists) {
-        const txData = txSnap.data();
-        const userId = txData.paidBy;
+      await txRef.update(updateData);
 
-        if (userId) {
-          const { tokensByUser } = await getTokensForUsers([userId]);
-          const userTokens = tokensByUser[userId] || [];
-
-          const amountStr = extractedAmount !== null
-            ? formatCurrency(extractedAmount)
-            : "valor não identificado";
-          const categoryStr = extractedCategory || "categoria não identificada";
-
-          const notifTitle = "Nota fiscal processada";
-          const notifBody = `Nota fiscal processada: ${amountStr} em ${categoryStr}`;
-
-          await sendPushNotification(userTokens, notifTitle, notifBody);
-
-          await createNotificationDoc({
-            userId,
-            coupleId,
-            type: "receipt_processed",
-            title: notifTitle,
-            message: notifBody,
-          });
-        }
-      }
-
-      return null;
-    } catch (error) {
-      logger.error(`Erro ao processar nota fiscal (${filePath}):`, error);
-      return null;
+      functions.logger.info(
+        `Transação ${transactionId} atualizada com dados do OCR: ${JSON.stringify(updateData)}`
+      );
+    } else {
+      functions.logger.warn(
+        `Nenhum dado útil extraído da nota fiscal ${filePath}.`
+      );
     }
+
+    // Notificar o usuário que criou a transação
+    const txSnap = await db
+      .collection("couples")
+      .doc(coupleId)
+      .collection("transactions")
+      .doc(transactionId)
+      .get();
+
+    if (txSnap.exists) {
+      const txData = txSnap.data();
+      const userId = txData.paidBy;
+
+      if (userId) {
+        const { tokensByUser } = await getTokensForUsers([userId]);
+        const userTokens = tokensByUser[userId] || [];
+
+        const amountStr = extractedAmount !== null
+          ? formatCurrency(extractedAmount)
+          : "valor não identificado";
+        const categoryStr = extractedCategory || "categoria não identificada";
+
+        const notifTitle = "Nota fiscal processada";
+        const notifBody = `Nota fiscal processada: ${amountStr} em ${categoryStr}`;
+
+        await sendPushNotification(userTokens, notifTitle, notifBody);
+
+        await createNotificationDoc({
+          userId,
+          coupleId,
+          type: "receipt_processed",
+          title: notifTitle,
+          message: notifBody,
+        });
+      }
+    }
+
+    return null;
+  } catch (error) {
+    functions.logger.error(`Erro ao processar nota fiscal (${filePath}):`, error);
+    return null;
   }
-);
+});
 
 // ---------------------------------------------------------------------------
 // 5-7. Funções extras (convites, assinaturas, wrapped)
