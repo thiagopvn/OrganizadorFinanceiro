@@ -63,6 +63,12 @@ export default function Profile() {
     const code = joinCode.trim()
     if (!code) return
 
+    // Prevent entering own couple code
+    if (code === coupleId) {
+      setJoinError('Este é o seu próprio código. Peça o código do seu parceiro(a).')
+      return
+    }
+
     setJoinError('')
     setJoinLoading(true)
 
@@ -73,7 +79,7 @@ export default function Profile() {
         setShowJoinModal(false)
         setJoinSuccess(false)
         setJoinCode('')
-        // Reload the page to re-fetch couple data
+        // Reload to re-init with the new couple
         window.location.reload()
       }, 1500)
     } catch (error) {

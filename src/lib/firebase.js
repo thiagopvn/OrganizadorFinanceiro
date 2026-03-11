@@ -26,7 +26,8 @@ import {
   onSnapshot,
   serverTimestamp,
   writeBatch,
-  Timestamp
+  Timestamp,
+  arrayUnion
 } from 'firebase/firestore'
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 
@@ -94,7 +95,9 @@ export const signInWithGoogle = async () => {
 
 export const signOutUser = () => firebaseSignOut(auth)
 
-// Couple management
+// ─── Couple management ───────────────────────────────────────────────
+
+// Create a new couple for a user
 export const createCouple = async (userId) => {
   const coupleRef = await addDoc(collection(db, 'couples'), {
     partnerIds: [userId],
@@ -108,33 +111,81 @@ export const createCouple = async (userId) => {
   return coupleRef.id
 }
 
+// Join an existing couple using the couple code
+// Handles: self-join (noop), duplicate cleanup, already full
 export const joinCouple = async (coupleId, userId) => {
-  const coupleDoc = await getDoc(doc(db, 'couples', coupleId))
-  if (!coupleDoc.exists()) throw new Error('Casal não encontrado')
-  const data = coupleDoc.data()
+  const coupleRef = doc(db, 'couples', coupleId)
+  const coupleSnap = await getDoc(coupleRef)
+  if (!coupleSnap.exists()) throw new Error('Casal não encontrado')
+  const data = coupleSnap.data()
 
-  // Deduplicate partnerIds (fix corrupted data where same UID appears twice)
-  const uniquePartnerIds = [...new Set(data.partnerIds)]
-  if (uniquePartnerIds.length !== data.partnerIds.length) {
-    await updateDoc(doc(db, 'couples', coupleId), { partnerIds: uniquePartnerIds })
-  }
+  // Deduplicate partnerIds if corrupted
+  const uniqueIds = [...new Set(data.partnerIds || [])]
 
-  // If user is already in this couple, just ensure their user doc has the coupleId
-  if (uniquePartnerIds.includes(userId)) {
+  // If user is already in this couple — nothing to do
+  if (uniqueIds.includes(userId)) {
+    // Just ensure user doc points to this couple
     await updateDoc(doc(db, 'users', userId), { coupleId })
     return
   }
 
-  if (uniquePartnerIds.length >= 2) throw new Error('Este casal já está completo')
+  // Couple is full (2 different people)
+  if (uniqueIds.length >= 2) throw new Error('Este casal já está completo')
 
-  await updateDoc(doc(db, 'couples', coupleId), {
-    partnerIds: [...uniquePartnerIds, userId],
-    splitRatio: { ...data.splitRatio, [userId]: 50 }
+  // Add user to the couple
+  await updateDoc(coupleRef, {
+    partnerIds: arrayUnion(userId),
+    [`splitRatio.${userId}`]: 50
   })
+
+  // Point user doc to this couple
   await updateDoc(doc(db, 'users', userId), { coupleId })
 }
 
-// Transaction helpers
+// Resolve a valid coupleId for the user (find existing or create new)
+export const resolveCouple = async (userId) => {
+  // 1. Check user doc for existing coupleId
+  const userSnap = await getDoc(doc(db, 'users', userId))
+  const savedCoupleId = userSnap.exists() ? userSnap.data().coupleId : null
+
+  // 2. If there's a saved coupleId, validate it exists
+  if (savedCoupleId) {
+    const coupleSnap = await getDoc(doc(db, 'couples', savedCoupleId))
+    if (coupleSnap.exists()) {
+      // Ensure user is in partnerIds
+      const partnerIds = coupleSnap.data().partnerIds || []
+      if (!partnerIds.includes(userId)) {
+        if (partnerIds.length < 2) {
+          await updateDoc(doc(db, 'couples', savedCoupleId), {
+            partnerIds: arrayUnion(userId),
+            [`splitRatio.${userId}`]: 50
+          })
+        }
+      }
+      return savedCoupleId
+    }
+    // Couple was deleted — clear stale reference
+    await updateDoc(doc(db, 'users', userId), { coupleId: null })
+  }
+
+  // 3. Search for any couple that already has this user
+  const q = query(
+    collection(db, 'couples'),
+    where('partnerIds', 'array-contains', userId)
+  )
+  const snap = await getDocs(q)
+  if (!snap.empty) {
+    const foundId = snap.docs[0].id
+    await updateDoc(doc(db, 'users', userId), { coupleId: foundId })
+    return foundId
+  }
+
+  // 4. No couple found — create a new one
+  return await createCouple(userId)
+}
+
+// ─── Transaction helpers ─────────────────────────────────────────────
+
 export const addTransaction = (coupleId, data) =>
   addDoc(collection(db, 'couples', coupleId, 'transactions'), {
     ...data,
@@ -148,7 +199,8 @@ export const updateTransaction = (coupleId, transactionId, data) =>
 export const deleteTransaction = (coupleId, transactionId) =>
   deleteDoc(doc(db, 'couples', coupleId, 'transactions', transactionId))
 
-// Budget helpers
+// ─── Budget helpers ──────────────────────────────────────────────────
+
 export const addBudget = (coupleId, data) =>
   addDoc(collection(db, 'couples', coupleId, 'budgets'), {
     ...data,
@@ -159,7 +211,8 @@ export const addBudget = (coupleId, data) =>
 export const updateBudget = (coupleId, budgetId, data) =>
   updateDoc(doc(db, 'couples', coupleId, 'budgets', budgetId), data)
 
-// Goal helpers
+// ─── Goal helpers ────────────────────────────────────────────────────
+
 export const addGoal = (coupleId, data) =>
   addDoc(collection(db, 'couples', coupleId, 'goals'), {
     ...data,
@@ -173,7 +226,8 @@ export const updateGoal = (coupleId, goalId, data) =>
 export const deleteGoal = (coupleId, goalId) =>
   deleteDoc(doc(db, 'couples', coupleId, 'goals', goalId))
 
-// Subscription helpers
+// ─── Subscription helpers ────────────────────────────────────────────
+
 export const addSubscription = (coupleId, data) =>
   addDoc(collection(db, 'couples', coupleId, 'subscriptions'), {
     ...data,
@@ -184,7 +238,8 @@ export const addSubscription = (coupleId, data) =>
 export const deleteSubscription = (coupleId, subscriptionId) =>
   deleteDoc(doc(db, 'couples', coupleId, 'subscriptions', subscriptionId))
 
-// Card helpers
+// ─── Card helpers ────────────────────────────────────────────────────
+
 export const addCard = (coupleId, data) =>
   addDoc(collection(db, 'couples', coupleId, 'cards'), {
     ...data,
@@ -194,7 +249,8 @@ export const addCard = (coupleId, data) =>
 export const deleteCard = (coupleId, cardId) =>
   deleteDoc(doc(db, 'couples', coupleId, 'cards', cardId))
 
-// Investment helpers
+// ─── Investment helpers ──────────────────────────────────────────────
+
 export const addInvestment = (coupleId, data) =>
   addDoc(collection(db, 'couples', coupleId, 'investments'), {
     ...data,
@@ -204,18 +260,21 @@ export const addInvestment = (coupleId, data) =>
 export const deleteInvestment = (coupleId, investmentId) =>
   deleteDoc(doc(db, 'couples', coupleId, 'investments', investmentId))
 
-// Couple settings
+// ─── Couple settings ─────────────────────────────────────────────────
+
 export const updateCoupleSettings = (coupleId, data) =>
   updateDoc(doc(db, 'couples', coupleId), data)
 
-// Storage helpers
+// ─── Storage helpers ─────────────────────────────────────────────────
+
 export const uploadReceipt = async (coupleId, transactionId, file) => {
   const storageRef = ref(storage, `receipts/${coupleId}/${transactionId}/${file.name}`)
   await uploadBytes(storageRef, file)
   return getDownloadURL(storageRef)
 }
 
-// Real-time listeners
+// ─── Real-time listeners ─────────────────────────────────────────────
+
 export const subscribeToTransactions = (coupleId, callback) => {
   const q = query(
     collection(db, 'couples', coupleId, 'transactions'),
@@ -223,32 +282,40 @@ export const subscribeToTransactions = (coupleId, callback) => {
     limit(100)
   )
   return onSnapshot(q, (snapshot) => {
-    const transactions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-    callback(transactions)
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener transactions error:', err)
+    callback([])
   })
 }
 
 export const subscribeToBudgets = (coupleId, callback) => {
   const q = query(collection(db, 'couples', coupleId, 'budgets'))
   return onSnapshot(q, (snapshot) => {
-    const budgets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-    callback(budgets)
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener budgets error:', err)
+    callback([])
   })
 }
 
 export const subscribeToGoals = (coupleId, callback) => {
   const q = query(collection(db, 'couples', coupleId, 'goals'))
   return onSnapshot(q, (snapshot) => {
-    const goals = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-    callback(goals)
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener goals error:', err)
+    callback([])
   })
 }
 
 export const subscribeToSubscriptions = (coupleId, callback) => {
   const q = query(collection(db, 'couples', coupleId, 'subscriptions'))
   return onSnapshot(q, (snapshot) => {
-    const subs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-    callback(subs)
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener subscriptions error:', err)
+    callback([])
   })
 }
 
@@ -258,30 +325,36 @@ export const subscribeToSettlements = (coupleId, callback) => {
     orderBy('createdAt', 'desc')
   )
   return onSnapshot(q, (snapshot) => {
-    const settlements = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-    callback(settlements)
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener settlements error:', err)
+    callback([])
   })
 }
 
 export const subscribeToCards = (coupleId, callback) => {
   const q = query(collection(db, 'couples', coupleId, 'cards'))
   return onSnapshot(q, (snapshot) => {
-    const cards = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-    callback(cards)
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener cards error:', err)
+    callback([])
   })
 }
 
 export const subscribeToInvestments = (coupleId, callback) => {
   const q = query(collection(db, 'couples', coupleId, 'investments'))
   return onSnapshot(q, (snapshot) => {
-    const investments = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-    callback(investments)
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener investments error:', err)
+    callback([])
   })
 }
 
 export const onAuthChange = (callback) => onAuthStateChanged(auth, callback)
 
 export {
-  doc, getDoc, getDocs, setDoc, updateDoc, collection, query,
-  where, orderBy, onSnapshot, serverTimestamp, Timestamp, writeBatch
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query,
+  where, orderBy, onSnapshot, serverTimestamp, Timestamp, writeBatch, arrayUnion
 }

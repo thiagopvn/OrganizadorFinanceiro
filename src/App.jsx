@@ -1,12 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import useStore from './lib/store'
 import {
-  onAuthChange, db, doc, getDoc, setDoc, updateDoc, collection, query, where,
-  getDocs, serverTimestamp, onSnapshot, orderBy,
+  onAuthChange, db, doc, getDoc, setDoc, serverTimestamp, onSnapshot,
+  collection, query, where, orderBy,
   subscribeToTransactions, subscribeToBudgets, subscribeToGoals, subscribeToSubscriptions,
   subscribeToSettlements, subscribeToCards, subscribeToInvestments,
-  createCouple
+  resolveCouple
 } from './lib/firebase'
 import { AppLayout } from './components/layout'
 
@@ -48,14 +48,15 @@ export default function App() {
 
   const unsubsRef = useRef([])
 
-  // Cleanup all Firestore listeners
-  const cleanupListeners = () => {
-    unsubsRef.current.forEach(unsub => unsub())
+  const cleanupListeners = useCallback(() => {
+    unsubsRef.current.forEach(unsub => {
+      try { unsub() } catch (e) { /* ignore */ }
+    })
     unsubsRef.current = []
-  }
+  }, [])
 
-  // Load user profile, find/create couple, subscribe to real-time data
-  const initUserData = async (firebaseUser) => {
+  // ─── Main init: get user profile, resolve couple, subscribe to data ───
+  const initUserData = useCallback(async (firebaseUser) => {
     cleanupListeners()
 
     try {
@@ -64,7 +65,6 @@ export default function App() {
       let userSnap = await getDoc(userRef)
 
       if (!userSnap.exists()) {
-        // First login — create user document
         await setDoc(userRef, {
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
@@ -81,114 +81,81 @@ export default function App() {
       const userProfile = userSnap.data()
       setUserProfile(userProfile)
 
-      // 2. Find or create couple
-      let coupleId = userProfile.coupleId
-
-      // Validate that the coupleId still exists in Firestore
-      if (coupleId) {
-        const coupleCheck = await getDoc(doc(db, 'couples', coupleId))
-        if (!coupleCheck.exists()) {
-          // Couple was deleted — clear the stale reference
-          coupleId = null
-          await setDoc(userRef, { coupleId: null }, { merge: true })
-        }
-      }
-
-      if (!coupleId) {
-        // Check if there's already a couple that has this user
-        const couplesQuery = query(
-          collection(db, 'couples'),
-          where('partnerIds', 'array-contains', firebaseUser.uid)
-        )
-        const couplesSnap = await getDocs(couplesQuery)
-
-        if (!couplesSnap.empty) {
-          coupleId = couplesSnap.docs[0].id
-        } else {
-          // Create a new couple
-          coupleId = await createCouple(firebaseUser.uid)
-        }
-
-        // Update user with coupleId
-        await setDoc(userRef, { coupleId }, { merge: true })
-        setUserProfile({ ...userProfile, coupleId })
-      }
-
+      // 2. Resolve couple — finds existing valid couple or creates a new one
+      //    This single function handles: stale coupleId, deleted couple,
+      //    user not in partnerIds, no couple at all
+      const coupleId = await resolveCouple(firebaseUser.uid)
       setCoupleId(coupleId)
 
-      // 3. Listen to couple document in real-time (detects when partner joins)
+      // 3. Listen to couple document in real-time
+      //    Detects: partner joining, data changes, couple edits
       const unsubCouple = onSnapshot(doc(db, 'couples', coupleId), async (coupleSnap) => {
-        if (coupleSnap.exists()) {
-          const coupleData = { id: coupleId, ...coupleSnap.data() }
-          const partnerIds = coupleData.partnerIds || []
+        if (!coupleSnap.exists()) {
+          // Couple was deleted while app is open — re-init
+          cleanupListeners()
+          const newCoupleId = await resolveCouple(firebaseUser.uid)
+          setCoupleId(newCoupleId)
+          initUserData(firebaseUser)
+          return
+        }
 
-          // Auto-fix: deduplicate partnerIds if corrupted (same UID twice)
-          const uniqueIds = [...new Set(partnerIds)]
-          let needsUpdate = uniqueIds.length !== partnerIds.length
+        const coupleData = { id: coupleId, ...coupleSnap.data() }
+        setCouple(coupleData)
 
-          // Auto-fix: if current user has this coupleId but isn't in partnerIds, add them
-          if (!uniqueIds.includes(firebaseUser.uid)) {
-            uniqueIds.push(firebaseUser.uid)
-            needsUpdate = true
-          }
+        // Load partner profile if there is one
+        const partnerIds = coupleData.partnerIds || []
+        const partnerUid = partnerIds.find(id => id !== firebaseUser.uid)
 
-          if (needsUpdate && uniqueIds.length <= 2) {
+        if (partnerUid) {
+          const currentPartner = useStore.getState().partner
+          if (!currentPartner || currentPartner.uid !== partnerUid) {
             try {
-              await updateDoc(doc(db, 'couples', coupleId), { partnerIds: uniqueIds })
-            } catch (e) {
-              console.warn('Erro ao corrigir partnerIds:', e)
-            }
-            return // onSnapshot will fire again with corrected data
-          }
-
-          setCouple(coupleData)
-
-          // Load partner profile
-          const partnerUid = uniqueIds.find(id => id !== firebaseUser.uid)
-          if (partnerUid) {
-            const currentPartner = useStore.getState().partner
-            // Only fetch partner if not loaded or UID changed
-            if (!currentPartner || currentPartner.uid !== partnerUid) {
               const partnerSnap = await getDoc(doc(db, 'users', partnerUid))
               if (partnerSnap.exists()) {
                 setPartner({ uid: partnerUid, ...partnerSnap.data() })
               }
+            } catch (e) {
+              console.warn('Erro ao carregar parceiro:', e)
             }
-          } else {
-            // No partner yet — clear stale partner data
-            setPartner(null)
           }
+        } else {
+          setPartner(null)
         }
+      }, (err) => {
+        console.warn('Listener couple error:', err)
       })
 
-      // 4. Subscribe to real-time data
-      const unsubTx = subscribeToTransactions(coupleId, (txs) => setTransactions(txs))
-      const unsubBudgets = subscribeToBudgets(coupleId, (b) => setBudgets(b))
-      const unsubGoals = subscribeToGoals(coupleId, (g) => setGoals(g))
-      const unsubSubs = subscribeToSubscriptions(coupleId, (s) => setSubscriptions(s))
-      const unsubSettlements = subscribeToSettlements(coupleId, (s) => setSettlements(s))
-      const unsubCards = subscribeToCards(coupleId, (c) => setCards(c))
-      const unsubInvestments = subscribeToInvestments(coupleId, (i) => setInvestments(i))
+      // 4. Subscribe to all subcollections
+      const unsubTx = subscribeToTransactions(coupleId, setTransactions)
+      const unsubBudgets = subscribeToBudgets(coupleId, setBudgets)
+      const unsubGoals = subscribeToGoals(coupleId, setGoals)
+      const unsubSubs = subscribeToSubscriptions(coupleId, setSubscriptions)
+      const unsubSettlements = subscribeToSettlements(coupleId, setSettlements)
+      const unsubCards = subscribeToCards(coupleId, setCards)
+      const unsubInvestments = subscribeToInvestments(coupleId, setInvestments)
 
-      // Subscribe to notifications for this user
+      // 5. Subscribe to notifications for this user
       const notifQuery = query(
         collection(db, 'notifications'),
         where('userId', '==', firebaseUser.uid),
         orderBy('createdAt', 'desc')
       )
       const unsubNotif = onSnapshot(notifQuery, (snap) => {
-        const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        setNotifications(notifs)
+        setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })))
       }, (err) => {
-        console.warn('Erro ao carregar notificações:', err)
+        console.warn('Listener notifications error:', err)
       })
 
       unsubsRef.current = [unsubCouple, unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubSettlements, unsubCards, unsubInvestments, unsubNotif]
 
     } catch (e) {
       console.error('Erro ao inicializar dados do usuário:', e)
+      // Even on error, try to show something — the user can still use the app
+      // The coupleId will be null and code shows "---", but at least the app loads
     }
-  }
+  }, [cleanupListeners, setCoupleId, setCouple, setPartner, setUserProfile,
+      setTransactions, setBudgets, setGoals, setSubscriptions, setSettlements,
+      setCards, setInvestments, setNotifications])
 
   useEffect(() => {
     initTheme()
