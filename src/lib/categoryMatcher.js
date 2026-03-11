@@ -8,10 +8,10 @@
 // Order matters — first match wins. More specific patterns come first.
 const RULES = [
   // ─── Transporte ─────────────────────────────────────────────
-  [['uber', 'uberrides', '99app', '99 ride', '99ride', 'dl*99', 'cabify', 'lyft', 'indriver', 'moovit', 'google moovit', 'buser', 'clickbus'], 'transporte', 'expense'],
+  [['uber', 'uberrides', '99app', '99 ride', '99ride', 'dl*99', 'dl *99', 'cabify', 'lyft', 'indriver', 'moovit', 'google moovit', 'buser', 'clickbus'], 'transporte', 'expense'],
 
   // ─── Restaurante / Alimentação fora ─────────────────────────
-  [['ifood', 'rappi', 'zé delivery', 'ze delivery', 'aiqfome', 'mcdonald', 'burger king', 'bk *', 'subway', 'outback', 'madero', 'starbucks', 'sushi', 'pizz', 'restauran', 'lanchonete', 'padaria', 'panificac', 'gourmet', 'baciodilatte', 'habib', 'china in box', 'dominos', 'kfc', 'popeyes', 'giraffas', 'coco bambu', 'spoleto', 'bob\'s', 'ryo sushi', 'deliv'], 'restaurante', 'expense'],
+  [['ifood', 'rappi', 'zé delivery', 'ze delivery', 'aiqfome', 'mcdonald', 'burger king', 'bk *', 'subway', 'outback', 'madero', 'starbucks', 'sushi', 'pizz', 'restauran', 'lanchonete', 'lanch', 'padaria', 'panificac', 'confeitaria', 'gourmet', 'baciodilatte', 'habib', 'china in box', 'dominos', 'kfc', 'popeyes', 'giraffas', 'coco bambu', 'spoleto', 'bob\'s', 'ryo sushi', 'deliv', 'burguer', 'plaza rest', 'fr ilha plaza rest'], 'restaurante', 'expense'],
 
   // ─── Mercado / Supermercado ─────────────────────────────────
   [['supermercado', 'mercado', 'assai', 'atacadao', 'atacadão', 'carrefour', 'extra hiper', 'pao de acucar', 'pão de açúcar', 'mundial', 'guanabara', 'hortifruti', 'sacolao', 'sacolão', 'natural da terra', 'oba hortifruti', 'sam\'s club', 'makro', 'fort atacadista', 'bistek', 'condor', 'prezunic', 'dia supermercado', 'big bompreco'], 'mercado', 'expense'],
@@ -20,22 +20,22 @@ const RULES = [
   [['netflix', 'spotify', 'disney', 'hbo', 'prime video', 'amazonprime', 'apple tv', 'youtube premium', 'youtube music', 'deezer', 'tidal', 'crunchyroll', 'paramount', 'star+', 'globoplay', 'telecine', 'ifood club', 'rappi prime', 'claude.ai', 'chatgpt', 'openai', 'perplexity', 'midjourney', 'notion', 'canva', 'adobe', 'figma', 'github', 'railway', 'vercel', 'heroku', 'aws', 'google one', 'google youtube', 'icloud', 'dropbox', 'onedrive', 'microsoft', 'locaweb', 'hostgator', 'godaddy', 'cloudflare', 'juridico ai', 'dl*google youtub', 'dl*google chatgp', 'dl*google google', 'dm *spotify', 'dm*spotify', 'subscription'], 'assinatura', 'expense'],
 
   // ─── Saúde ──────────────────────────────────────────────────
-  [['farmacia', 'farmácia', 'drogaria', 'drogasil', 'droga raia', 'drogasmil', 'panvel', 'ultrafarma', 'hospital', 'clinica', 'clínica', 'laboratorio', 'laboratório', 'dentista', 'odonto', 'psicologo', 'psicólogo', 'psiquiatr', 'fisioter', 'nutricion', 'terapia', 'consulta medica', 'plano de saude', 'unimed', 'amil', 'sulamerica', 'bradesco saude', 'oboticario', 'boticário', 'biana dutra', 'pastore assist', 'ser psicologo', 'brapsi', 'esquadraofit', 'yazio', 'google yazio', 'appesquadraofit', 'smartfit', 'smart fit', 'academia', 'gym', 'fitness', 'dumbbell', 'unity fitness'], 'saude', 'expense'],
+  [['farmacia', 'farmácia', 'drogaria', 'drogasil', 'droga raia', 'drogasmil', 'panvel', 'ultrafarma', 'hospital', 'clinica', 'clínica', 'laboratorio', 'laboratório', 'dentista', 'odonto', 'psicologo', 'psicólogo', 'psiquiatr', 'fisioter', 'nutricion', 'terapia', 'consulta medica', 'plano de saude', 'unimed', 'amil', 'sulamerica', 'bradesco saude', 'oboticario', 'boticário', 'biana dutra', 'pastore assist', 'ser psicologo', 'brapsi', 'esquadraofit', 'yazio', 'google yazio', 'google flo health', 'flo health', 'appesquadraofit', 'smartfit', 'smart fit', 'sky fit', 'skyfit', 'academia', 'gym', 'fitness', 'dumbbell', 'unity fitness'], 'saude', 'expense'],
 
   // ─── Educação ───────────────────────────────────────────────
-  [['educacao', 'educação', 'escola', 'faculdade', 'universidade', 'curso', 'udemy', 'coursera', 'alura', 'rocketseat', 'origamid', 'gran educacao', 'leiturinha', 'leiturariocomerci', 'livraria', 'livro', 'saraiva', 'cultura', 'amazon kindle', 'hotmart', 'eduzz', 'clipping cacd', 'pg *clipping'], 'educacao', 'expense'],
+  [['educacao', 'educação', 'escola', 'faculdade', 'universidade', 'curso', 'udemy', 'coursera', 'alura', 'rocketseat', 'origamid', 'gran educacao', 'leiturinha', 'leiturariocomerci', 'livraria', 'livro', 'saraiva', 'cultura', 'amazon kindle', 'hotmart', 'eduzz', 'clipping cacd', 'pg *clipping', 'descomplica', 'aprova total', 'vestibular'], 'educacao', 'expense'],
 
   // ─── Compras / Shopping ─────────────────────────────────────
-  [['amazon', 'amazonmktplc', 'mercadolivre', 'mercado livre', 'shopee', 'shein', 'aliexpress', 'wish', 'magazineluiza', 'magalu', 'casas bahia', 'americanas', 'submarino', 'ponto frio', 'centauro', 'netshoes', 'zattini', 'renner', 'riachuelo', 'c&a', 'cea', 'marisa', 'hering', 'dafiti', 'zaful', 'ikea', 'tok stok', 'etna', 'leroy merlin', 'loja', 'calcados', 'calçados', 'modas', 'moda ', 'roupas', 'elo7', 'bela ferraz', 'vou comprar', 'ilha plaza', 'ilha shopping', 'ilha drive', 'top baby', 'foxbrinquedos', 'papelaria', 'gipapelariaper', 'distribuidoraf', 'underpax', 'newlook', 'sh ilha', 'p k k', 'engageele', 'scscomerc', 'vividbuys', 'hoaglobal', 'eventodoity', 'zamak', 'comercio varejist', 'bell art', 'domilhaproducao', 'maneco com', 'drp 2015'], 'compras', 'expense'],
+  [['amazon', 'amazonmktplc', 'mercadolivre', 'mercado livre', 'shopee', 'shein', 'aliexpress', 'wish', 'magazineluiza', 'magalu', 'casas bahia', 'americanas', 'submarino', 'ponto frio', 'centauro', 'netshoes', 'zattini', 'renner', 'riachuelo', 'c&a', 'cea', 'marisa', 'hering', 'dafiti', 'zaful', 'ikea', 'tok stok', 'etna', 'leroy merlin', 'loja', 'calcados', 'calçados', 'modas', 'moda ', 'roupas', 'confeccoes', 'confecções', 'elo7', 'bela ferraz', 'vou comprar', 'ilha plaza', 'ilha shopping', 'ilha drive', 'top baby', 'foxbrinquedos', 'papelaria', 'gipapelariaper', 'distribuidoraf', 'underpax', 'newlook', 'sh ilha', 'p k k', 'engageele', 'scscomerc', 'vividbuys', 'hoaglobal', 'eventodoity', 'zamak', 'comercio varejist', 'bell art', 'domilhaproducao', 'maneco com', 'drp 2015', 'ark comercio', 'dock roupas', 'mariettas', 'modernatta', 'emporiomix', 'lider da ilha', 'lojinhadonemo', 'marlibabyenxov', 'eprisan'], 'compras', 'expense'],
 
   // ─── Lazer / Entretenimento ─────────────────────────────────
-  [['cinema', 'cinemark', 'ingresso', 'sympla', 'teatro', 'show', 'parque', 'museu', 'zoo', 'aquario', 'beach park', 'hopi hari', 'beto carrero', 'game', 'brawl', 'google brawl', 'playstation', 'xbox', 'nintendo', 'steam', 'epic games', 'riot'], 'lazer', 'expense'],
+  [['cinema', 'cinemark', 'ingresso', 'sympla', 'teatro', 'show', 'parque', 'museu', 'zoo', 'aquario', 'beach park', 'hopi hari', 'beto carrero', 'game', 'brawl', 'google brawl', 'google mob control', 'mob control', 'playstation', 'xbox', 'nintendo', 'steam', 'epic games', 'riot'], 'lazer', 'expense'],
 
   // ─── Viagem ─────────────────────────────────────────────────
   [['airbnb', 'booking', 'hotel', 'hostel', 'pousada', 'latam', 'gol linhas', 'azul linhas', 'decolar', 'hurb', '123milhas', 'cvc viagens', 'passagem', 'aeroporto', 'mala', 'duty free'], 'viagem', 'expense'],
 
   // ─── Moradia ────────────────────────────────────────────────
-  [['aluguel', 'condominio', 'condomínio', 'iptu', 'luz', 'energia', 'enel', 'cemig', 'cpfl', 'copel', 'celesc', 'gas', 'gás', 'comgas', 'agua', 'água', 'sabesp', 'cedae', 'internet', 'claro', 'vivo', 'tim', 'oi fibra', 'net virtua'], 'moradia', 'expense'],
+  [['aluguel', 'condominio', 'condomínio', 'iptu', 'luz', 'energia', 'enel', 'cemig', 'cpfl', 'copel', 'celesc', 'gas', 'gás', 'comgas', 'agua', 'água', 'sabesp', 'cedae', 'internet', 'claro', 'vivo', 'tim s a', 'tim s/a', 'oi fibra', 'net virtua'], 'moradia', 'expense'],
 
   // ─── Investimento ───────────────────────────────────────────
   [['investimento', 'tesouro direto', 'cdb', 'lci', 'lca', 'fundo', 'acao', 'ação', 'xp investimentos', 'rico', 'clear', 'nuinvest', 'btg', 'inter invest', 'binance', 'bitcoin', 'cripto', 'crypto'], 'investimento', 'expense'],
@@ -65,10 +65,15 @@ function normalize(text) {
 
 /**
  * Classify a single OFX transaction memo into a category.
- * Returns { category, transactionType }
+ * @param {string} memo - Transaction description from OFX
+ * @param {number} amount - Signed amount (negative=expense, positive=income)
+ * @param {object} options - Extra context
+ * @param {string} options.accountType - 'credit_card' or 'checking'
+ * Returns { category, transactionType, isBillPayment }
  */
-export function classifyTransaction(memo, amount) {
+export function classifyTransaction(memo, amount, options = {}) {
   const normalized = normalize(memo)
+  const isCreditCard = options.accountType === 'credit_card'
 
   // Handle IOF charges — classify as the referenced transaction's category (always expense)
   if (normalized.startsWith('iof de ')) {
@@ -85,9 +90,15 @@ export function classifyTransaction(memo, amount) {
     return result ? { ...result, transactionType: txType } : { category: 'outros', transactionType: txType }
   }
 
-  // Income detection (positive amounts)
+  // Positive amounts (credits)
   if (amount > 0) {
-    // Check if it looks like salary/payment
+    // On credit card: "Pagamento recebido" = bill payment (not real income)
+    // These are partial payments the user makes to reduce the credit card balance
+    if (isCreditCard && normalized.includes('pagamento recebido')) {
+      return { category: 'outros', transactionType: 'income', isBillPayment: true }
+    }
+
+    // On checking accounts: "Pagamento recebido" = real income (PIX, transfer, salary)
     if (normalized.includes('pagamento recebido') || normalized.includes('salario') || normalized.includes('salário') ||
         normalized.includes('deposito') || normalized.includes('depósito') || normalized.includes('transferencia recebida')) {
       return { category: 'salario', transactionType: 'income' }
@@ -172,12 +183,16 @@ export function extractInstallment(memo) {
 
 /**
  * Process a batch of raw OFX transactions into app-ready format.
+ * @param {Array} rawTransactions - Parsed OFX transactions
+ * @param {object} options - Extra context from parsed OFX file
+ * @param {string} options.accountType - 'credit_card' or 'checking'
+ *
  * Each output has: description, amount, category, transactionType, date, memo (original),
- * fitId, installment, isIOF, isEstorno
+ * fitId, installment, isIOF, isEstorno, isBillPayment
  */
-export function processTransactions(rawTransactions) {
+export function processTransactions(rawTransactions, options = {}) {
   return rawTransactions.map(tx => {
-    const { category, transactionType } = classifyTransaction(tx.memo, tx.amount)
+    const result = classifyTransaction(tx.memo, tx.amount, options)
     const description = cleanDescription(tx.memo)
     const installment = extractInstallment(tx.memo)
     const normalizedMemo = tx.memo.toLowerCase()
@@ -185,14 +200,15 @@ export function processTransactions(rawTransactions) {
     return {
       description,
       amount: tx.amount,
-      category,
-      transactionType,
+      category: result.category,
+      transactionType: result.transactionType,
       date: tx.date,
       memo: tx.memo, // original OFX memo
       fitId: tx.fitId,
       installment,
       isIOF: normalizedMemo.startsWith('iof de '),
       isEstorno: normalizedMemo.startsWith('estorno de '),
+      isBillPayment: result.isBillPayment || false,
     }
   })
 }

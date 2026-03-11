@@ -37,6 +37,7 @@ export default function Import() {
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterType, setFilterType] = useState('all') // all, expense, income
   const [showIOF, setShowIOF] = useState(true)
+  const [showBillPayments, setShowBillPayments] = useState(false)
   const [editingTx, setEditingTx] = useState(null) // index of tx being edited
   const [expandedGroups, setExpandedGroups] = useState(new Set())
   const [duplicateIds, setDuplicateIds] = useState(new Set())
@@ -68,8 +69,10 @@ export default function Import() {
 
       setParsedData(parsed)
 
-      // Process and classify all transactions
-      const processed = processTransactions(parsed.transactions)
+      // Process and classify all transactions, passing account type for context
+      const processed = processTransactions(parsed.transactions, {
+        accountType: parsed.account.type
+      })
 
       // Check for duplicates against existing transactions
       const existingFitIds = new Set(
@@ -88,10 +91,10 @@ export default function Import() {
 
       setProcessedTx(processed)
 
-      // Auto-select non-duplicate, non-IOF transactions
+      // Auto-select: exclude duplicates, IOFs, and bill payments (pagamentos de fatura)
       const autoSelected = new Set()
       processed.forEach((tx, i) => {
-        if (!dupes.has(tx.fitId) && !tx.isIOF) {
+        if (!dupes.has(tx.fitId) && !tx.isIOF && !tx.isBillPayment) {
           autoSelected.add(i)
         }
       })
@@ -164,9 +167,10 @@ export default function Import() {
         if (filterType === 'expense' && tx.amount >= 0) return false
         if (filterType === 'income' && tx.amount < 0) return false
         if (!showIOF && tx.isIOF) return false
+        if (!showBillPayments && tx.isBillPayment) return false
         return true
       })
-  }, [processedTx, filterCategory, filterType, showIOF])
+  }, [processedTx, filterCategory, filterType, showIOF, showBillPayments])
 
   const groupedByDate = useMemo(() => {
     const groups = {}
@@ -192,9 +196,11 @@ export default function Import() {
   const stats = useMemo(() => {
     const selected = processedTx.filter((_, i) => selectedTx.has(i))
     const totalExpenses = selected.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)
-    const totalIncome = selected.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0)
+    const totalIncome = selected.filter(t => t.amount > 0 && !t.isBillPayment).reduce((s, t) => s + t.amount, 0)
     const categories = new Set(selected.map(t => t.category))
     const duplicates = processedTx.filter(t => duplicateIds.has(t.fitId)).length
+    const billPayments = processedTx.filter(t => t.isBillPayment).length
+    const billPaymentTotal = processedTx.filter(t => t.isBillPayment).reduce((s, t) => s + t.amount, 0)
 
     return {
       total: processedTx.length,
@@ -203,6 +209,8 @@ export default function Import() {
       income: totalIncome,
       categories: categories.size,
       duplicates,
+      billPayments,
+      billPaymentTotal,
     }
   }, [processedTx, selectedTx, duplicateIds])
 
@@ -272,6 +280,7 @@ export default function Import() {
     setFilterCategory('all')
     setFilterType('all')
     setShowIOF(true)
+    setShowBillPayments(false)
     setEditingTx(null)
     setExpandedGroups(new Set())
   }
@@ -437,6 +446,23 @@ export default function Import() {
                 </Card>
               </div>
 
+              {/* Bill payment notice */}
+              {stats.billPayments > 0 && (
+                <Card className="!bg-blue-50/50 dark:!bg-blue-900/10 !border-blue-100 dark:!border-blue-800/30" padding="p-3">
+                  <div className="flex items-start gap-2">
+                    <CreditCard className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                        {stats.billPayments} pagamentos de fatura detectados ({formatCurrency(stats.billPaymentTotal)})
+                      </p>
+                      <p className="text-[10px] text-blue-500/70 dark:text-blue-400/60 mt-0.5">
+                        Abatimentos parciais do cartão foram desmarcados automaticamente para não inflar suas receitas.
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               {/* Filters */}
               <div>
                 <button
@@ -492,14 +518,25 @@ export default function Import() {
                         ))}
                       </div>
 
-                      {/* IOF toggle */}
-                      <button
-                        onClick={() => setShowIOF(!showIOF)}
-                        className="flex items-center gap-2 text-xs text-slate-500"
-                      >
-                        {showIOF ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                        {showIOF ? 'Ocultando IOFs' : 'Mostrando IOFs'}
-                      </button>
+                      {/* Toggle buttons */}
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          onClick={() => setShowIOF(!showIOF)}
+                          className="flex items-center gap-2 text-xs text-slate-500"
+                        >
+                          {showIOF ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                          {showIOF ? 'Mostrando IOFs' : 'Ocultando IOFs'}
+                        </button>
+                        {stats.billPayments > 0 && (
+                          <button
+                            onClick={() => setShowBillPayments(!showBillPayments)}
+                            className="flex items-center gap-2 text-xs text-slate-500"
+                          >
+                            {showBillPayments ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                            {showBillPayments ? 'Mostrando pgtos fatura' : 'Ocultando pgtos fatura'}
+                          </button>
+                        )}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -622,6 +659,9 @@ export default function Import() {
                                       )}
                                       {tx.isIOF && (
                                         <Badge variant="warning">IOF</Badge>
+                                      )}
+                                      {tx.isBillPayment && (
+                                        <Badge variant="info">Pgto Fatura</Badge>
                                       )}
                                     </div>
                                   </div>
