@@ -99,12 +99,12 @@ export default function App() {
   return (
     <>
       <Routes>
-        {/* Auth routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* Auth routes - redirect to app if already logged in */}
+        <Route path="/login" element={user ? <Navigate to="/app/home" replace /> : <Login />} />
+        <Route path="/register" element={user ? <Navigate to="/app/home" replace /> : <Register />} />
 
-        {/* App routes */}
-        <Route path="/app" element={<AppLayout />}>
+        {/* App routes - protected */}
+        <Route path="/app" element={user ? <AppLayout /> : <Navigate to="/login" replace />}>
           <Route path="home" element={<Dashboard />} />
           <Route path="history" element={<History />} />
           <Route path="analytics" element={<Analytics />} />
@@ -126,7 +126,7 @@ export default function App() {
         </Route>
 
         {/* Default redirect */}
-        <Route path="*" element={<Navigate to="/app/home" replace />} />
+        <Route path="*" element={<Navigate to={user ? "/app/home" : "/login"} replace />} />
       </Routes>
 
       {/* Global Add Transaction Bottom Sheet */}
