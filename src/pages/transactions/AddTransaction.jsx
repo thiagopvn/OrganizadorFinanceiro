@@ -1,14 +1,15 @@
 import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Camera, Delete, Check, Minus, Plus } from 'lucide-react'
-import { Button, Toggle, TabBar } from '../../components/ui'
-import useStore from '../../lib/store'
-import { CATEGORY_LIST, CATEGORIES, formatCurrency } from '../../lib/utils'
+import { Camera, Delete, Check } from 'lucide-react'
 import {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
   Heart, GraduationCap, ShoppingBag, CreditCard, TrendingUp,
   Wallet, Briefcase, Gift, Plane, MoreHorizontal
 } from 'lucide-react'
+import { Button, Toggle, TabBar } from '../../components/ui'
+import useStore from '../../lib/store'
+import { addTransaction } from '../../lib/firebase'
+import { CATEGORY_LIST, CATEGORIES, formatCurrency } from '../../lib/utils'
 
 const ICON_MAP = {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
@@ -24,24 +25,20 @@ const NUM_KEYS = [
 ]
 
 export default function AddTransaction({ onClose }) {
-  const { addTransactionLocal, setShowSuccess } = useStore()
+  const { user, coupleId, setShowSuccess } = useStore()
   const [amountStr, setAmountStr] = useState('0')
   const [category, setCategory] = useState('mercado')
   const [isShared, setIsShared] = useState(true)
   const [tab, setTab] = useState('expense')
+  const [saving, setSaving] = useState(false)
 
   const parsedAmount = parseFloat(amountStr) || 0
   const displayAmount = formatCurrency(parsedAmount / 100)
 
   const handleKey = useCallback((key) => {
     if (key === 'del') {
-      setAmountStr(prev => {
-        if (prev.length <= 1) return '0'
-        return prev.slice(0, -1)
-      })
+      setAmountStr(prev => prev.length <= 1 ? '0' : prev.slice(0, -1))
     } else if (key === '.') {
-      // For the cent-based input, the dot is not needed since we divide by 100
-      // We can ignore it or use it as-is
       return
     } else {
       setAmountStr(prev => {
@@ -52,30 +49,43 @@ export default function AddTransaction({ onClose }) {
     }
   }, [])
 
-  const handleConfirm = () => {
-    if (parsedAmount === 0) return
+  const handleConfirm = async () => {
+    if (parsedAmount === 0 || !coupleId || saving) return
+    setSaving(true)
 
     const finalAmount = parsedAmount / 100
     const signedAmount = tab === 'expense' ? -Math.abs(finalAmount) : Math.abs(finalAmount)
     const cat = CATEGORIES[category]
 
-    const transaction = {
-      id: 'tx_' + Date.now(),
-      description: cat?.label || 'Transação',
-      amount: signedAmount,
-      category,
-      date: new Date(),
-      paidBy: 'user1',
-      isShared,
-      merchant: ''
-    }
+    try {
+      await addTransaction(coupleId, {
+        description: cat?.label || 'Transação',
+        amount: signedAmount,
+        category,
+        date: new Date(),
+        paidBy: user.uid,
+        paidByName: user.displayName || 'Eu',
+        isShared,
+        splitType: 'equal',
+        merchant: '',
+        tags: [],
+        comments: []
+      })
 
-    addTransactionLocal(transaction)
-    onClose()
-    setShowSuccess({
-      amount: signedAmount,
-      category
-    })
+      onClose()
+      setShowSuccess({ amount: signedAmount, category })
+
+      // Reset form
+      setAmountStr('0')
+      setCategory('mercado')
+      setIsShared(true)
+      setTab('expense')
+    } catch (err) {
+      console.error('Erro ao salvar transação:', err)
+      alert('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -103,8 +113,8 @@ export default function AddTransaction({ onClose }) {
       {/* Expense / Income Tab */}
       <TabBar
         tabs={[
-          { key: 'expense', label: 'Adicionar Despesa' },
-          { key: 'income', label: 'Adicionar Receita' }
+          { key: 'expense', label: 'Despesa' },
+          { key: 'income', label: 'Receita' }
         ]}
         active={tab}
         onChange={setTab}
@@ -113,11 +123,10 @@ export default function AddTransaction({ onClose }) {
       {/* Category Pills */}
       <div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">Categoria</p>
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 hide-scrollbar">
           {CATEGORY_LIST.map((cat) => {
             const IconComp = ICON_MAP[cat.icon] || MoreHorizontal
             const isSelected = category === cat.key
-
             return (
               <motion.button
                 key={cat.key}
@@ -126,7 +135,7 @@ export default function AddTransaction({ onClose }) {
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
                   isSelected
                     ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                 }`}
               >
                 <IconComp className="w-3.5 h-3.5" />
@@ -150,7 +159,7 @@ export default function AddTransaction({ onClose }) {
         {NUM_KEYS.flat().map((key) => (
           <motion.button
             key={key}
-            whileTap={{ scale: 0.92, backgroundColor: key === 'del' ? 'rgba(239,68,68,0.15)' : 'rgba(249,115,22,0.15)' }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => handleKey(key)}
             className={`h-14 rounded-xl text-lg font-bold flex items-center justify-center transition-colors ${
               key === 'del'
@@ -170,7 +179,8 @@ export default function AddTransaction({ onClose }) {
         fullWidth
         size="lg"
         onClick={handleConfirm}
-        disabled={parsedAmount === 0}
+        disabled={parsedAmount === 0 || saving}
+        loading={saving}
         icon={Check}
       >
         Confirmar

@@ -11,17 +11,20 @@ import { signOutUser } from '../../lib/firebase'
 
 export default function Profile() {
   const navigate = useNavigate()
-  const { user, userProfile, isDemo, darkMode, privacyMode, toggleDarkMode, togglePrivacyMode } = useStore()
+  const { user, userProfile, partner, couple, darkMode, privacyMode, toggleDarkMode, togglePrivacyMode, reset } = useStore()
   const [faceIdEnabled, setFaceIdEnabled] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
-  const userName = userProfile?.displayName || user?.displayName || 'Alex'
-  const partnerName = 'Sam'
+  const userName = user?.displayName || 'Você'
+  const partnerName = partner?.displayName || 'Parceiro(a)'
+  const hasPartner = !!partner
+  const coupleYear = couple?.createdAt?.toDate ? couple.createdAt.toDate().getFullYear() : new Date().getFullYear()
 
   const handleSignOut = async () => {
     setSigningOut(true)
     try {
       await signOutUser()
+      reset()
       navigate('/login')
     } catch (error) {
       console.error('Erro ao sair:', error)
@@ -40,22 +43,25 @@ export default function Profile() {
       >
         {/* Overlapping Avatars */}
         <div className="flex items-center justify-center mb-4">
-          <Avatar name={userName} size="xl" />
-          <Avatar
-            name={partnerName}
-            size="xl"
-            className="-ml-6 ring-4 ring-orange-50 dark:ring-slate-900"
-          />
+          <Avatar src={user?.photoURL} name={userName} size="xl" />
+          {hasPartner && (
+            <Avatar
+              src={partner?.photoURL}
+              name={partnerName}
+              size="xl"
+              className="-ml-6 ring-4 ring-orange-50 dark:ring-slate-900"
+            />
+          )}
         </div>
 
         <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-          {userName} & {partnerName}
+          {hasPartner ? `${userName} & ${partnerName}` : userName}
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Conta Compartilhada Unity Finance
+          {hasPartner ? 'Conta Compartilhada Unity Finance' : 'Convide seu parceiro(a) para começar!'}
         </p>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-          Gerenciando juntos desde 2023
+          {hasPartner ? `Gerenciando juntos desde ${coupleYear}` : user?.email}
         </p>
       </motion.div>
 
@@ -186,7 +192,7 @@ export default function Profile() {
 
         {/* Version footer */}
         <p className="text-center text-xs text-slate-400 dark:text-slate-500 pb-4">
-          Unity Finance v1.0.0 {isDemo && '(Demo)'}
+          Unity Finance v1.0.0
         </p>
       </div>
     </div>

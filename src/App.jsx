@@ -1,8 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { AnimatePresence } from 'framer-motion'
 import useStore from './lib/store'
-import { onAuthChange, db, doc, getDoc } from './lib/firebase'
+import {
+  onAuthChange, db, doc, getDoc, setDoc, collection, query, where,
+  getDocs, serverTimestamp, onSnapshot, orderBy,
+  subscribeToTransactions, subscribeToBudgets, subscribeToGoals, subscribeToSubscriptions,
+  createCouple
+} from './lib/firebase'
 import { AppLayout } from './components/layout'
 
 // Pages
@@ -28,50 +32,143 @@ import Export from './pages/export/Export'
 import Wrapped from './pages/wrapped/Wrapped'
 
 // Modals
-import { BottomSheet, Modal } from './components/ui'
+import { BottomSheet } from './components/ui'
 import { SuccessModal, AchievementModal } from './pages/modals/Modals'
 
 export default function App() {
   const {
-    user, setUser, setUserProfile, setIsLoading, isLoading, initTheme,
+    user, setUser, setUserProfile, setCoupleId, setCouple, setPartner,
+    setTransactions, setBudgets, setGoals, setSubscriptions, setNotifications,
+    setIsLoading, isLoading, initTheme, reset,
     showAddTransaction, setShowAddTransaction,
     showSuccess, setShowSuccess,
-    showAchievement, setShowAchievement,
-    isDemo, setIsDemo
+    showAchievement, setShowAchievement
   } = useStore()
+
+  const unsubsRef = useRef([])
+
+  // Cleanup all Firestore listeners
+  const cleanupListeners = () => {
+    unsubsRef.current.forEach(unsub => unsub())
+    unsubsRef.current = []
+  }
+
+  // Load user profile, find/create couple, subscribe to real-time data
+  const initUserData = async (firebaseUser) => {
+    cleanupListeners()
+
+    try {
+      // 1. Get or create user profile
+      const userRef = doc(db, 'users', firebaseUser.uid)
+      let userSnap = await getDoc(userRef)
+
+      if (!userSnap.exists()) {
+        // First login — create user document
+        await setDoc(userRef, {
+          email: firebaseUser.email,
+          displayName: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL,
+          coupleId: null,
+          monthlyIncome: 0,
+          fcmTokens: [],
+          createdAt: serverTimestamp(),
+          settings: { darkMode: false, privacyMode: false, faceIdEnabled: false, language: 'pt-BR' }
+        })
+        userSnap = await getDoc(userRef)
+      }
+
+      const userProfile = userSnap.data()
+      setUserProfile(userProfile)
+
+      // 2. Find or create couple
+      let coupleId = userProfile.coupleId
+
+      if (!coupleId) {
+        // Check if there's already a couple that has this user
+        const couplesQuery = query(
+          collection(db, 'couples'),
+          where('partnerIds', 'array-contains', firebaseUser.uid)
+        )
+        const couplesSnap = await getDocs(couplesQuery)
+
+        if (!couplesSnap.empty) {
+          coupleId = couplesSnap.docs[0].id
+        } else {
+          // Create a new couple
+          coupleId = await createCouple(firebaseUser.uid)
+        }
+
+        // Update user with coupleId
+        await setDoc(userRef, { coupleId }, { merge: true })
+        setUserProfile({ ...userProfile, coupleId })
+      }
+
+      setCoupleId(coupleId)
+
+      // 3. Load couple document and partner info
+      const coupleSnap = await getDoc(doc(db, 'couples', coupleId))
+      if (coupleSnap.exists()) {
+        const coupleData = { id: coupleId, ...coupleSnap.data() }
+        setCouple(coupleData)
+
+        // Load partner profile
+        const partnerUid = coupleData.partnerIds?.find(id => id !== firebaseUser.uid)
+        if (partnerUid) {
+          const partnerSnap = await getDoc(doc(db, 'users', partnerUid))
+          if (partnerSnap.exists()) {
+            setPartner({ uid: partnerUid, ...partnerSnap.data() })
+          }
+        }
+      }
+
+      // 4. Subscribe to real-time data
+      const unsubTx = subscribeToTransactions(coupleId, (txs) => setTransactions(txs))
+      const unsubBudgets = subscribeToBudgets(coupleId, (b) => setBudgets(b))
+      const unsubGoals = subscribeToGoals(coupleId, (g) => setGoals(g))
+      const unsubSubs = subscribeToSubscriptions(coupleId, (s) => setSubscriptions(s))
+
+      // Subscribe to notifications for this user
+      const notifQuery = query(
+        collection(db, 'notifications'),
+        where('userId', '==', firebaseUser.uid),
+        orderBy('createdAt', 'desc')
+      )
+      const unsubNotif = onSnapshot(notifQuery, (snap) => {
+        const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        setNotifications(notifs)
+      }, (err) => {
+        console.warn('Erro ao carregar notificações:', err)
+      })
+
+      unsubsRef.current = [unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubNotif]
+
+    } catch (e) {
+      console.error('Erro ao inicializar dados do usuário:', e)
+    }
+  }
 
   useEffect(() => {
     initTheme()
 
-    // Listen for online/offline
     const handleOnline = () => useStore.getState().setIsOffline(false)
     const handleOffline = () => useStore.getState().setIsOffline(true)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
 
-    // Auth listener
     const unsub = onAuthChange(async (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser)
-        setIsDemo(false)
-        try {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid))
-          if (userDoc.exists()) {
-            setUserProfile(userDoc.data())
-          }
-        } catch (e) {
-          console.warn('Erro ao carregar perfil:', e)
-        }
+        await initUserData(firebaseUser)
       } else {
-        setUser(null)
-        setUserProfile(null)
-        setIsDemo(true)
+        cleanupListeners()
+        reset()
       }
       setIsLoading(false)
     })
 
     return () => {
       unsub()
+      cleanupListeners()
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
@@ -99,11 +196,9 @@ export default function App() {
   return (
     <>
       <Routes>
-        {/* Auth routes - redirect to app if already logged in */}
         <Route path="/login" element={user ? <Navigate to="/app/home" replace /> : <Login />} />
         <Route path="/register" element={user ? <Navigate to="/app/home" replace /> : <Register />} />
 
-        {/* App routes - protected */}
         <Route path="/app" element={user ? <AppLayout /> : <Navigate to="/login" replace />}>
           <Route path="home" element={<Dashboard />} />
           <Route path="history" element={<History />} />
@@ -125,11 +220,9 @@ export default function App() {
           <Route path="wrapped" element={<Wrapped />} />
         </Route>
 
-        {/* Default redirect */}
         <Route path="*" element={<Navigate to={user ? "/app/home" : "/login"} replace />} />
       </Routes>
 
-      {/* Global Add Transaction Bottom Sheet */}
       <BottomSheet
         isOpen={showAddTransaction}
         onClose={() => setShowAddTransaction(false)}
@@ -138,17 +231,8 @@ export default function App() {
         <AddTransaction onClose={() => setShowAddTransaction(false)} />
       </BottomSheet>
 
-      {/* Success Modal */}
-      <SuccessModal
-        data={showSuccess}
-        onClose={() => setShowSuccess(null)}
-      />
-
-      {/* Achievement Modal */}
-      <AchievementModal
-        data={showAchievement}
-        onClose={() => setShowAchievement(null)}
-      />
+      <SuccessModal data={showSuccess} onClose={() => setShowSuccess(null)} />
+      <AchievementModal data={showAchievement} onClose={() => setShowAchievement(null)} />
     </>
   )
 }

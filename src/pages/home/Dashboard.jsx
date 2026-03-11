@@ -37,11 +37,11 @@ export default function Dashboard() {
   const {
     transactions, goals, notifications,
     privacyMode, togglePrivacyMode,
-    getNetWorth, user, userProfile
+    getNetWorth, getBalance, user, partner
   } = useStore()
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
-  const netWorth = getNetWorth()
+  const balance = getBalance()
   const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions])
 
   const displayValue = (value) => {
@@ -49,13 +49,9 @@ export default function Dashboard() {
     return formatCurrency(value)
   }
 
-  const displayPercent = (value) => {
-    if (privacyMode) return '••%'
-    return value
-  }
-
-  const userName = userProfile?.displayName || user?.displayName || 'Usuário'
-  const partnerName = 'Parceiro(a)'
+  const userName = user?.displayName || 'Você'
+  const partnerName = partner?.displayName || 'Parceiro(a)'
+  const hasPartner = !!partner
 
   return (
     <PageTransition>
@@ -70,8 +66,10 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             {/* Couple Avatar */}
             <div className="relative flex items-center">
-              <Avatar name={userName} size="md" className="ring-2 ring-white dark:ring-slate-900 z-10" />
-              <Avatar name={partnerName} size="md" className="ring-2 ring-white dark:ring-slate-900 -ml-3" />
+              <Avatar src={user?.photoURL} name={userName} size="md" className="ring-2 ring-white dark:ring-slate-900 z-10" />
+              {hasPartner && (
+                <Avatar src={partner?.photoURL} name={partnerName} size="md" className="ring-2 ring-white dark:ring-slate-900 -ml-3" />
+              )}
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-900 dark:text-white">Unity Finance</h1>
@@ -111,15 +109,16 @@ export default function Dashboard() {
             <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-white/5 rounded-full" />
 
             <div className="relative z-10">
-              <p className="text-white/80 text-sm font-medium mb-1">Patrimônio do Casal</p>
-              <h2 className="text-3xl font-bold mb-2">{displayValue(netWorth)}</h2>
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-0.5">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span className="text-xs font-semibold">{displayPercent('+4,2%')}</span>
+              <p className="text-white/80 text-sm font-medium mb-1">Saldo do Casal</p>
+              <h2 className="text-3xl font-bold mb-2">{displayValue(balance)}</h2>
+              {transactions.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <div className={`flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-0.5`}>
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span className="text-xs font-semibold">{transactions.length} transações</span>
+                  </div>
                 </div>
-                <span className="text-white/70 text-xs">este mês</span>
-              </div>
+              )}
             </div>
           </div>
         </motion.div>
