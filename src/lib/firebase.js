@@ -199,6 +199,58 @@ export const updateTransaction = (coupleId, transactionId, data) =>
 export const deleteTransaction = (coupleId, transactionId) =>
   deleteDoc(doc(db, 'couples', coupleId, 'transactions', transactionId))
 
+// Batch import transactions (up to 500 per batch — Firestore limit)
+export const importTransactionsBatch = async (coupleId, transactions) => {
+  const results = { success: 0, errors: 0 }
+  const BATCH_SIZE = 400 // stay under Firestore 500 limit
+
+  for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db)
+    const chunk = transactions.slice(i, i + BATCH_SIZE)
+
+    for (const tx of chunk) {
+      const docRef = doc(collection(db, 'couples', coupleId, 'transactions'))
+      batch.set(docRef, {
+        ...tx,
+        createdAt: serverTimestamp(),
+        status: 'synced',
+        source: 'ofx_import'
+      })
+    }
+
+    try {
+      await batch.commit()
+      results.success += chunk.length
+    } catch (err) {
+      console.error('Batch import error:', err)
+      results.errors += chunk.length
+    }
+  }
+
+  return results
+}
+
+// Check for duplicate transactions by fitId
+export const checkDuplicateFitIds = async (coupleId, fitIds) => {
+  const existing = new Set()
+  const txRef = collection(db, 'couples', coupleId, 'transactions')
+
+  // Query transactions that have a fitId field
+  const q = query(txRef, where('fitId', 'in', fitIds.slice(0, 30))) // Firestore 'in' limit is 30
+  try {
+    const snap = await getDocs(q)
+    snap.docs.forEach(d => {
+      const data = d.data()
+      if (data.fitId) existing.add(data.fitId)
+    })
+  } catch (e) {
+    // If query fails (e.g., index not created), we proceed without duplicate check
+    console.warn('Duplicate check skipped:', e)
+  }
+
+  return existing
+}
+
 // ─── Budget helpers ──────────────────────────────────────────────────
 
 export const addBudget = (coupleId, data) =>
@@ -279,7 +331,7 @@ export const subscribeToTransactions = (coupleId, callback) => {
   const q = query(
     collection(db, 'couples', coupleId, 'transactions'),
     orderBy('createdAt', 'desc'),
-    limit(100)
+    limit(2000)
   )
   return onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))

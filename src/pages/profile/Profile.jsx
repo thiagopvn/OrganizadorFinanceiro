@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, Fingerprint, Plane, Settings, Bell, Moon,
   FileText, Sparkles, Lock, HelpCircle, LogOut, ChevronRight,
-  UserPlus, Copy, Check, Link2, X, Heart
+  UserPlus, Copy, Check, Link2, X, Heart, Upload
 } from 'lucide-react'
 import { Button, Card, Toggle, Avatar, ListItem, SectionHeader, Badge } from '../../components/ui'
 import useStore from '../../lib/store'
@@ -250,6 +250,13 @@ export default function Profile() {
         >
           <SectionHeader title="Mais" />
           <Card padding="p-2">
+            <ListItem
+              icon={Upload}
+              iconColor="bg-brand-50 dark:bg-brand-900/20 text-brand-500"
+              title="Importar Extrato OFX"
+              subtitle="Importar dados do banco"
+              onClick={() => navigate('/app/import')}
+            />
             <ListItem
               icon={FileText}
               iconColor="bg-blue-50 dark:bg-blue-900/20 text-blue-500"

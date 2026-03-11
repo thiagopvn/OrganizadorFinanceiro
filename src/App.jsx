@@ -30,6 +30,7 @@ import Investments from './pages/investments/Investments'
 import TravelMode from './pages/travel/TravelMode'
 import Notifications from './pages/notifications/Notifications'
 import Export from './pages/export/Export'
+import ImportOFX from './pages/import/Import'
 import Wrapped from './pages/wrapped/Wrapped'
 
 // Modals
@@ -227,6 +228,7 @@ export default function App() {
           <Route path="travel" element={<TravelMode />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="export" element={<Export />} />
+          <Route path="import" element={<ImportOFX />} />
           <Route path="wrapped" element={<Wrapped />} />
         </Route>
 
