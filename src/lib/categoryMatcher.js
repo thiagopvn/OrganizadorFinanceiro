@@ -8,7 +8,7 @@
 // Order matters — first match wins. More specific patterns come first.
 const RULES = [
   // ─── Transporte ─────────────────────────────────────────────
-  [['uber', 'uberrides', '99app', '99 ride', '99ride', 'dl*99', 'cabify', 'lyft', 'indriver', 'moovit', 'buser', 'clickbus'], 'transporte', 'expense'],
+  [['uber', 'uberrides', '99app', '99 ride', '99ride', 'dl*99', 'cabify', 'lyft', 'indriver', 'moovit', 'google moovit', 'buser', 'clickbus'], 'transporte', 'expense'],
 
   // ─── Restaurante / Alimentação fora ─────────────────────────
   [['ifood', 'rappi', 'zé delivery', 'ze delivery', 'aiqfome', 'mcdonald', 'burger king', 'bk *', 'subway', 'outback', 'madero', 'starbucks', 'sushi', 'pizz', 'restauran', 'lanchonete', 'padaria', 'panificac', 'gourmet', 'baciodilatte', 'habib', 'china in box', 'dominos', 'kfc', 'popeyes', 'giraffas', 'coco bambu', 'spoleto', 'bob\'s', 'ryo sushi', 'deliv'], 'restaurante', 'expense'],
@@ -17,10 +17,10 @@ const RULES = [
   [['supermercado', 'mercado', 'assai', 'atacadao', 'atacadão', 'carrefour', 'extra hiper', 'pao de acucar', 'pão de açúcar', 'mundial', 'guanabara', 'hortifruti', 'sacolao', 'sacolão', 'natural da terra', 'oba hortifruti', 'sam\'s club', 'makro', 'fort atacadista', 'bistek', 'condor', 'prezunic', 'dia supermercado', 'big bompreco'], 'mercado', 'expense'],
 
   // ─── Assinaturas / Serviços digitais ────────────────────────
-  [['netflix', 'spotify', 'disney', 'hbo', 'prime video', 'amazonprime', 'apple tv', 'youtube premium', 'youtube music', 'deezer', 'tidal', 'crunchyroll', 'paramount', 'star+', 'globoplay', 'telecine', 'ifood club', 'rappi prime', 'claude.ai', 'chatgpt', 'openai', 'perplexity', 'midjourney', 'notion', 'canva', 'adobe', 'figma', 'github', 'railway', 'vercel', 'heroku', 'aws', 'google one', 'google youtube', 'icloud', 'dropbox', 'onedrive', 'microsoft*microsoft', 'ppro *microsoft', 'locaweb', 'hostgator', 'godaddy', 'cloudflare', 'juridico ai', 'dl*google youtub', 'dl*google chatgp', 'dm *spotify', 'dm*spotify', 'subscription'], 'assinatura', 'expense'],
+  [['netflix', 'spotify', 'disney', 'hbo', 'prime video', 'amazonprime', 'apple tv', 'youtube premium', 'youtube music', 'deezer', 'tidal', 'crunchyroll', 'paramount', 'star+', 'globoplay', 'telecine', 'ifood club', 'rappi prime', 'claude.ai', 'chatgpt', 'openai', 'perplexity', 'midjourney', 'notion', 'canva', 'adobe', 'figma', 'github', 'railway', 'vercel', 'heroku', 'aws', 'google one', 'google youtube', 'icloud', 'dropbox', 'onedrive', 'microsoft', 'locaweb', 'hostgator', 'godaddy', 'cloudflare', 'juridico ai', 'dl*google youtub', 'dl*google chatgp', 'dl*google google', 'dm *spotify', 'dm*spotify', 'subscription'], 'assinatura', 'expense'],
 
   // ─── Saúde ──────────────────────────────────────────────────
-  [['farmacia', 'farmácia', 'drogaria', 'drogasil', 'droga raia', 'drogasmil', 'panvel', 'ultrafarma', 'hospital', 'clinica', 'clínica', 'laboratorio', 'laboratório', 'dentista', 'odonto', 'psicologo', 'psicólogo', 'psiquiatr', 'fisioter', 'nutricion', 'terapia', 'consulta medica', 'plano de saude', 'unimed', 'amil', 'sulamerica', 'bradesco saude', 'oboticario', 'boticário', 'biana dutra', 'pastore assist', 'ser psicologo', 'brapsi', 'esquadraofit', 'yazio', 'smartfit', 'smart fit', 'academia', 'gym', 'fitness', 'dumbbell'], 'saude', 'expense'],
+  [['farmacia', 'farmácia', 'drogaria', 'drogasil', 'droga raia', 'drogasmil', 'panvel', 'ultrafarma', 'hospital', 'clinica', 'clínica', 'laboratorio', 'laboratório', 'dentista', 'odonto', 'psicologo', 'psicólogo', 'psiquiatr', 'fisioter', 'nutricion', 'terapia', 'consulta medica', 'plano de saude', 'unimed', 'amil', 'sulamerica', 'bradesco saude', 'oboticario', 'boticário', 'biana dutra', 'pastore assist', 'ser psicologo', 'brapsi', 'esquadraofit', 'yazio', 'google yazio', 'appesquadraofit', 'smartfit', 'smart fit', 'academia', 'gym', 'fitness', 'dumbbell', 'unity fitness'], 'saude', 'expense'],
 
   // ─── Educação ───────────────────────────────────────────────
   [['educacao', 'educação', 'escola', 'faculdade', 'universidade', 'curso', 'udemy', 'coursera', 'alura', 'rocketseat', 'origamid', 'gran educacao', 'leiturinha', 'leiturariocomerci', 'livraria', 'livro', 'saraiva', 'cultura', 'amazon kindle', 'hotmart', 'eduzz', 'clipping cacd', 'pg *clipping'], 'educacao', 'expense'],
@@ -29,7 +29,7 @@ const RULES = [
   [['amazon', 'amazonmktplc', 'mercadolivre', 'mercado livre', 'shopee', 'shein', 'aliexpress', 'wish', 'magazineluiza', 'magalu', 'casas bahia', 'americanas', 'submarino', 'ponto frio', 'centauro', 'netshoes', 'zattini', 'renner', 'riachuelo', 'c&a', 'cea', 'marisa', 'hering', 'dafiti', 'zaful', 'ikea', 'tok stok', 'etna', 'leroy merlin', 'loja', 'calcados', 'calçados', 'modas', 'moda ', 'roupas', 'elo7', 'bela ferraz', 'vou comprar', 'ilha plaza', 'ilha shopping', 'ilha drive', 'top baby', 'foxbrinquedos', 'papelaria', 'gipapelariaper', 'distribuidoraf', 'underpax', 'newlook', 'sh ilha', 'p k k', 'engageele', 'scscomerc', 'vividbuys', 'hoaglobal', 'eventodoity', 'zamak', 'comercio varejist', 'bell art', 'domilhaproducao', 'maneco com', 'drp 2015'], 'compras', 'expense'],
 
   // ─── Lazer / Entretenimento ─────────────────────────────────
-  [['cinema', 'cinemark', 'ingresso.com', 'sympla', 'teatro', 'show', 'parque', 'museu', 'zoo', 'aquario', 'beach park', 'hopi hari', 'beto carrero', 'game', 'brawl', 'playstation', 'xbox', 'nintendo', 'steam', 'epic games', 'riot'], 'lazer', 'expense'],
+  [['cinema', 'cinemark', 'ingresso', 'sympla', 'teatro', 'show', 'parque', 'museu', 'zoo', 'aquario', 'beach park', 'hopi hari', 'beto carrero', 'game', 'brawl', 'google brawl', 'playstation', 'xbox', 'nintendo', 'steam', 'epic games', 'riot'], 'lazer', 'expense'],
 
   // ─── Viagem ─────────────────────────────────────────────────
   [['airbnb', 'booking', 'hotel', 'hostel', 'pousada', 'latam', 'gol linhas', 'azul linhas', 'decolar', 'hurb', '123milhas', 'cvc viagens', 'passagem', 'aeroporto', 'mala', 'duty free'], 'viagem', 'expense'],
@@ -105,12 +105,21 @@ export function classifyTransaction(memo, amount) {
 }
 
 /**
- * Match normalized text against rule set
+ * Match normalized text against rule set.
+ * Keywords are also normalized to ensure consistent matching.
  */
 function matchRules(normalized) {
   for (const [keywords, category, txType] of RULES) {
     for (const kw of keywords) {
-      if (normalized.includes(kw.toLowerCase())) {
+      // Normalize the keyword the same way we normalize the memo
+      const normalizedKw = kw
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[*_\-."']/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (normalized.includes(normalizedKw)) {
         return { category, transactionType: txType }
       }
     }
