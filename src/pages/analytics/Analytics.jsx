@@ -1,14 +1,14 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, Sparkles, ArrowUpRight, ArrowDownRight, Lightbulb, BarChart3, Users } from 'lucide-react'
+import { TrendingUp, TrendingDown, Sparkles, ArrowUpRight, ArrowDownRight, Lightbulb, BarChart3, Users, PiggyBank } from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Card, TabBar, SectionHeader, Badge, EmptyState, Avatar, ProgressBar } from '../../components/ui'
 import { DonutChart, BarChart, LineChart } from '../../components/charts'
 import useStore from '../../lib/store'
-import { formatCurrency, formatCurrencyShort, CATEGORIES, CATEGORY_LIST, toDate } from '../../lib/utils'
+import { formatCurrency, formatCurrencyShort, CATEGORIES, getCategoryList, toDate } from '../../lib/utils'
 
 export default function Analytics() {
-  const { transactions, getCategoryTotals, getNetWorth, getTotalIncome, getTotalExpenses, privacyMode, user, partner } = useStore()
+  const { transactions, getCategoryTotals, getNetWorth, getTotalIncome, getTotalExpenses, getTotalSavings, privacyMode, user, partner } = useStore()
   const [activeTab, setActiveTab] = useState('overview')
 
   const tabs = [
@@ -20,8 +20,9 @@ export default function Analytics() {
   // KPI calculations
   const totalIncome = getTotalIncome()
   const totalExpenses = getTotalExpenses()
-  const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpenses) / totalIncome) * 100) : 0
-  const netFlow = totalIncome - totalExpenses
+  const totalSavings = getTotalSavings()
+  const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpenses - totalSavings) / totalIncome) * 100) : 0
+  const netFlow = totalIncome - totalExpenses - totalSavings
 
   // Build monthly chart data from real transactions
   const monthlyData = useMemo(() => {
@@ -31,8 +32,9 @@ export default function Analytics() {
     transactions.forEach(t => {
       const d = toDate(t.date || t.createdAt)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      if (!monthMap[key]) monthMap[key] = { income: 0, expenses: 0 }
-      if (t.amount > 0) monthMap[key].income += t.amount
+      if (!monthMap[key]) monthMap[key] = { income: 0, expenses: 0, savings: 0 }
+      if (t.transactionType === 'savings') monthMap[key].savings += Math.abs(t.amount)
+      else if (t.amount > 0) monthMap[key].income += t.amount
       else monthMap[key].expenses += Math.abs(t.amount)
     })
 
@@ -44,6 +46,7 @@ export default function Analytics() {
       labels: sortedKeys.map(k => monthNames[parseInt(k.split('-')[1]) - 1]),
       income: sortedKeys.map(k => monthMap[k].income),
       expenses: sortedKeys.map(k => monthMap[k].expenses),
+      savings: sortedKeys.map(k => monthMap[k].savings),
     }
   }, [transactions])
 
@@ -150,40 +153,34 @@ export default function Analytics() {
         ) : (
           <>
             {/* KPI Cards */}
-            <motion.div variants={itemVariants} className="grid grid-cols-2 gap-3">
-              <Card>
-                <div className="flex items-start justify-between mb-1">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Taxa de Economia</p>
-                </div>
-                <p className="text-2xl font-bold text-slate-800 dark:text-white">
+            <motion.div variants={itemVariants} className="grid grid-cols-3 gap-2.5">
+              <Card padding="p-3">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">Taxa Economia</p>
+                <p className="text-xl font-bold text-slate-800 dark:text-white">
                   {privacyMode ? '••' : `${savingsRate}%`}
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">Este mês</p>
               </Card>
 
-              <Card>
-                <div className="flex items-start justify-between mb-1">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Fluxo Líquido</p>
-                  <div className={`flex items-center gap-0.5 ${netFlow >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                    {netFlow >= 0 ? (
-                      <ArrowUpRight className="w-3.5 h-3.5" />
-                    ) : (
-                      <ArrowDownRight className="w-3.5 h-3.5" />
-                    )}
-                  </div>
-                </div>
-                <p className={`text-2xl font-bold ${netFlow >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+              <Card padding="p-3">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">Fluxo Líquido</p>
+                <p className={`text-xl font-bold ${netFlow >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                   {privacyMode ? '••••' : formatCurrencyShort(netFlow)}
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">Este mês</p>
+              </Card>
+
+              <Card padding="p-3">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-1">Guardado</p>
+                <p className="text-xl font-bold text-violet-500">
+                  {privacyMode ? '••••' : formatCurrencyShort(totalSavings)}
+                </p>
               </Card>
             </motion.div>
 
-            {/* Revenue vs Expenses Chart */}
+            {/* Revenue vs Expenses vs Savings Chart */}
             {monthlyData && (activeTab === 'overview' || activeTab === 'expenses' || activeTab === 'income') && (
               <motion.div variants={itemVariants}>
                 <Card>
-                  <SectionHeader title="Receitas vs Despesas" />
+                  <SectionHeader title="Receitas vs Despesas vs Economia" />
                   <BarChart
                     labels={monthlyData.labels}
                     datasets={[
@@ -196,17 +193,26 @@ export default function Analytics() {
                         label: 'Despesas',
                         data: monthlyData.expenses,
                         backgroundColor: '#cbd5e1'
+                      },
+                      {
+                        label: 'Economia',
+                        data: monthlyData.savings,
+                        backgroundColor: '#8b5cf6'
                       }
                     ]}
                   />
-                  <div className="flex items-center justify-center gap-6 mt-3">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center gap-4 mt-3">
+                    <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-brand-500" />
                       <span className="text-xs text-slate-500 dark:text-slate-400">Receitas</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-slate-300" />
                       <span className="text-xs text-slate-500 dark:text-slate-400">Despesas</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-violet-500" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Economia</span>
                     </div>
                   </div>
                 </Card>

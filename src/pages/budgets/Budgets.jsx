@@ -248,44 +248,51 @@ export default function Budgets() {
                         }
                       />
 
-                      {/* Deposit button for savings */}
+                      {/* Info for savings goals */}
                       {goal.type === 'savings' && (
                         <div className="mt-3">
-                          {depositGoalId === goal.id ? (
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2">
-                                <span className="text-xs text-slate-400">R$</span>
-                                <input
-                                  type="number"
-                                  placeholder="0,00"
-                                  value={depositAmount}
-                                  onChange={(e) => setDepositAmount(e.target.value)}
-                                  autoFocus
-                                  className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-100 focus:outline-none w-full"
-                                />
+                          {goal.period === 'custom' ? (
+                            // Legacy manual deposit for "no deadline" goals
+                            depositGoalId === goal.id ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2">
+                                  <span className="text-xs text-slate-400">R$</span>
+                                  <input
+                                    type="number"
+                                    placeholder="0,00"
+                                    value={depositAmount}
+                                    onChange={(e) => setDepositAmount(e.target.value)}
+                                    autoFocus
+                                    className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-100 focus:outline-none w-full"
+                                  />
+                                </div>
+                                <button
+                                  onClick={handleDeposit}
+                                  disabled={depositing || !depositAmount}
+                                  className="px-3 py-2 bg-violet-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                                >
+                                  {depositing ? '...' : 'Depositar'}
+                                </button>
+                                <button
+                                  onClick={() => { setDepositGoalId(null); setDepositAmount('') }}
+                                  className="px-2 py-2 text-slate-400 text-xs"
+                                >
+                                  ✕
+                                </button>
                               </div>
+                            ) : (
                               <button
-                                onClick={handleDeposit}
-                                disabled={depositing || !depositAmount}
-                                className="px-3 py-2 bg-violet-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                                onClick={() => setDepositGoalId(goal.id)}
+                                className="w-full py-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors"
                               >
-                                {depositing ? '...' : 'Depositar'}
+                                <Coins className="w-3.5 h-3.5" />
+                                Depositar Valor
                               </button>
-                              <button
-                                onClick={() => { setDepositGoalId(null); setDepositAmount('') }}
-                                className="px-2 py-2 text-slate-400 text-xs"
-                              >
-                                ✕
-                              </button>
-                            </div>
+                            )
                           ) : (
-                            <button
-                              onClick={() => setDepositGoalId(goal.id)}
-                              className="w-full py-2 bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors"
-                            >
-                              <Coins className="w-3.5 h-3.5" />
-                              Depositar Valor
-                            </button>
+                            <p className="text-[10px] text-violet-500 dark:text-violet-400 text-center font-medium">
+                              Use a aba "Economia" ao adicionar transações
+                            </p>
                           )}
                         </div>
                       )}

@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isSameMonth, getDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Search, ChevronLeft, ChevronRight, X, Filter, Clock, Users } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, X, Filter, Clock, Users, PiggyBank } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, Input } from '../../components/ui'
 import useStore from '../../lib/store'
-import { formatCurrency, formatDate, CATEGORIES, CATEGORY_LIST, getProgressColor, getProgressTextColor, groupByDate, toDate } from '../../lib/utils'
+import { formatCurrency, formatDate, CATEGORIES, getCategoryList, getProgressColor, getProgressTextColor, groupByDate, toDate } from '../../lib/utils'
 
 export default function History() {
   const navigate = useNavigate()
@@ -76,11 +76,15 @@ export default function History() {
 
   // Month summary
   const monthExpenses = useMemo(() =>
-    monthTransactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0),
+    monthTransactions.filter(t => t.amount < 0 && t.transactionType !== 'savings').reduce((sum, t) => sum + Math.abs(t.amount), 0),
     [monthTransactions]
   )
   const monthIncome = useMemo(() =>
     monthTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
+    [monthTransactions]
+  )
+  const monthSavings = useMemo(() =>
+    monthTransactions.filter(t => t.transactionType === 'savings').reduce((sum, t) => sum + Math.abs(t.amount), 0),
     [monthTransactions]
   )
 
@@ -159,7 +163,7 @@ export default function History() {
                     >
                       Todas
                     </button>
-                    {CATEGORY_LIST.map(cat => (
+                    {getCategoryList().map(cat => (
                       <button
                         key={cat.key}
                         onClick={() => setSelectedCategory(selectedCategory === cat.key ? null : cat.key)}
@@ -305,19 +309,27 @@ export default function History() {
 
         {/* Month Summary */}
         <Card>
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`grid ${monthSavings > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Gasto</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Gasto</p>
               <p className="text-lg font-bold text-red-500">
                 {privacyMode ? '••••' : formatCurrency(-monthExpenses)}
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Recebido</p>
+            <div className={monthSavings > 0 ? 'text-center' : 'text-right'}>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Recebido</p>
               <p className="text-lg font-bold text-emerald-500">
                 {privacyMode ? '••••' : formatCurrency(monthIncome)}
               </p>
             </div>
+            {monthSavings > 0 && (
+              <div className="text-right">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Guardado</p>
+                <p className="text-lg font-bold text-violet-500">
+                  {privacyMode ? '••••' : formatCurrency(monthSavings)}
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -366,6 +378,7 @@ export default function History() {
                         const cat = CATEGORIES[transaction.category] || CATEGORIES.outros
                         const IconComponent = getCategoryIcon(transaction.category)
                         const isExpense = transaction.amount < 0
+                        const isSavings = transaction.transactionType === 'savings'
                         const transactionTime = format(
                           toDate(transaction.date || transaction.createdAt),
                           'HH:mm'
@@ -380,9 +393,15 @@ export default function History() {
                           >
                             <div
                               className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                              style={{ backgroundColor: `${cat.color}15` }}
+                              style={{
+                                backgroundColor: isSavings ? '#8b5cf615' : `${cat?.color}15`,
+                                color: isSavings ? '#8b5cf6' : undefined
+                              }}
                             >
-                              <IconComponent className="w-5 h-5" style={{ color: cat.color }} />
+                              {isSavings
+                                ? <PiggyBank className="w-5 h-5" style={{ color: '#8b5cf6' }} />
+                                : <IconComponent className="w-5 h-5" style={{ color: cat?.color }} />
+                              }
                             </div>
 
                             <div className="flex-1 min-w-0">
@@ -390,12 +409,16 @@ export default function History() {
                                 {transaction.description}
                               </p>
                               <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
-                                {transaction.merchant && `${transaction.merchant} · `}{transactionTime}
+                                {isSavings && 'Economia · '}{transaction.merchant && `${transaction.merchant} · `}{transactionTime}
                               </p>
                             </div>
 
                             <div className="text-right shrink-0">
-                              <p className={`text-sm font-bold ${isExpense ? 'text-red-500' : 'text-emerald-500'}`}>
+                              <p className={`text-sm font-bold ${
+                                isSavings ? 'text-violet-500' :
+                                isExpense ? 'text-red-500' :
+                                'text-emerald-500'
+                              }`}>
                                 {privacyMode ? '••••' : formatCurrency(transaction.amount)}
                               </p>
                             </div>

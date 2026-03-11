@@ -12,7 +12,7 @@ import { PageHeader } from '../../components/layout'
 import { Card, Input, TabBar, ProgressBar, Toggle, Button } from '../../components/ui'
 import useStore from '../../lib/store'
 import { addGoal, updateGoal, deleteGoal } from '../../lib/firebase'
-import { formatCurrency, CATEGORIES, CATEGORY_LIST } from '../../lib/utils'
+import { formatCurrency, CATEGORIES, getCategoryList } from '../../lib/utils'
 
 const ICON_MAP = {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
@@ -50,11 +50,11 @@ const GOAL_TYPES = [
   }
 ]
 
-// Categories filtered by type
-const EXPENSE_CATEGORIES = CATEGORY_LIST.filter(c =>
+// Categories filtered by type (dynamic to include custom)
+const getExpenseCategories = () => getCategoryList().filter(c =>
   !['salario', 'freelance'].includes(c.key)
 )
-const INCOME_CATEGORIES = CATEGORY_LIST.filter(c =>
+const getIncomeCategories = () => getCategoryList().filter(c =>
   ['salario', 'freelance', 'investimento', 'presente', 'outros'].includes(c.key)
 )
 
@@ -93,13 +93,18 @@ export default function EditGoal() {
   const GoalIcon = ICON_MAP[icon] || (selectedCat ? ICON_MAP[selectedCat.icon] : null) || Target
 
   const periodTabs = goalType === 'savings'
-    ? [{ key: 'custom', label: 'Sem prazo' }]
+    ? [
+      { key: 'weekly', label: 'Semanal' },
+      { key: 'monthly', label: 'Mensal' },
+      { key: 'custom', label: 'Sem prazo' }
+    ]
     : [
+      { key: 'weekly', label: 'Semanal' },
       { key: 'monthly', label: 'Mensal' },
       { key: 'yearly', label: 'Anual' }
     ]
 
-  const categoryOptions = goalType === 'income_goal' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+  const categoryOptions = goalType === 'income_goal' ? getIncomeCategories() : getExpenseCategories()
 
   // Determine range based on type
   const amountRange = goalType === 'savings'
@@ -123,10 +128,10 @@ export default function EditGoal() {
       setPeriod('monthly')
     } else {
       setName('')
-      setCategory('')
+      setCategory('outros')
       setIcon('PiggyBank')
       setTargetAmount(10000)
-      setPeriod('custom')
+      setPeriod('monthly')
     }
   }
 
@@ -294,38 +299,36 @@ export default function EditGoal() {
         </motion.div>
 
         {/* Category Selection */}
-        {goalType !== 'savings' && (
-          <motion.div variants={itemVariants}>
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2.5">
-              Categoria
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {categoryOptions.map((cat) => {
-                const CatIcon = ICON_MAP[cat.icon] || MoreHorizontal
-                const isSelected = category === cat.key
-                return (
-                  <motion.button
-                    key={cat.key}
-                    whileTap={{ scale: 0.93 }}
-                    onClick={() => {
-                      setCategory(cat.key)
-                      if (!icon) setIcon(cat.icon)
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      isSelected
-                        ? 'text-white shadow-md'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}
-                    style={isSelected ? { backgroundColor: cat.color } : {}}
-                  >
-                    <CatIcon className="w-3.5 h-3.5" />
-                    {cat.label}
-                  </motion.button>
-                )
-              })}
-            </div>
-          </motion.div>
-        )}
+        <motion.div variants={itemVariants}>
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2.5">
+            Categoria
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {categoryOptions.map((cat) => {
+              const CatIcon = ICON_MAP[cat.icon] || LucideIcons[cat.icon] || MoreHorizontal
+              const isSelected = category === cat.key
+              return (
+                <motion.button
+                  key={cat.key}
+                  whileTap={{ scale: 0.93 }}
+                  onClick={() => {
+                    setCategory(cat.key)
+                    if (!icon) setIcon(cat.icon)
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    isSelected
+                      ? 'text-white shadow-md'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                  style={isSelected ? { backgroundColor: cat.color } : {}}
+                >
+                  <CatIcon className="w-3.5 h-3.5" />
+                  {cat.label}
+                </motion.button>
+              )
+            })}
+          </div>
+        </motion.div>
 
         {/* Savings icon selection */}
         {goalType === 'savings' && (
@@ -403,14 +406,12 @@ export default function EditGoal() {
         </motion.div>
 
         {/* Period */}
-        {goalType !== 'savings' && (
-          <motion.div variants={itemVariants}>
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
-              Período de Controle
-            </p>
-            <TabBar tabs={periodTabs} active={period} onChange={setPeriod} />
-          </motion.div>
-        )}
+        <motion.div variants={itemVariants}>
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
+            Período de Controle
+          </p>
+          <TabBar tabs={periodTabs} active={period} onChange={setPeriod} />
+        </motion.div>
 
         {/* Info card */}
         <motion.div variants={itemVariants}>
@@ -429,7 +430,7 @@ export default function EditGoal() {
                 <>O progresso acompanha todas as receitas na categoria <strong>{CATEGORIES[category]?.label || 'selecionada'}</strong>. A barra de progresso avança conforme as receitas são lançadas.</>
               )}
               {goalType === 'savings' && (
-                <>Vocês podem depositar valores manualmente conforme forem poupando. O progresso mostra quanto já foi juntado em relação ao objetivo final.</>
+                <>O progresso é calculado automaticamente a partir dos lançamentos de <strong>Economia</strong> na categoria <strong>{CATEGORIES[category]?.label || 'selecionada'}</strong>. Use a aba "Economia" ao adicionar transações para guardar dinheiro.</>
               )}
             </p>
           </Card>
@@ -459,7 +460,7 @@ export default function EditGoal() {
             fullWidth
             size="lg"
             onClick={handleSave}
-            disabled={saving || (!category && goalType !== 'savings')}
+            disabled={saving || !category}
             loading={saving}
             icon={Check}
           >

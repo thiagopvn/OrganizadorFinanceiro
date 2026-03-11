@@ -6,8 +6,9 @@ import {
   Wallet, CreditCard, BarChart3, Scissors, Target,
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
   Heart, GraduationCap, ShoppingBag, Briefcase,
-  Gift, Plane, MoreHorizontal, Shield, Zap
+  Gift, Plane, MoreHorizontal, Shield, Zap, PiggyBank
 } from 'lucide-react'
+import * as AllLucideIcons from 'lucide-react'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, EmptyState } from '../../components/ui'
 import { getProgressColor, getProgressTextColor } from '../../lib/utils'
 import { PageTransition } from '../../components/layout'
@@ -38,12 +39,13 @@ export default function Dashboard() {
   const {
     transactions, goals, notifications,
     privacyMode, togglePrivacyMode,
-    getNetWorth, getBalance, getGoalsWithProgress, user, partner
+    getNetWorth, getBalance, getTotalSavings, getGoalsWithProgress, user, partner
   } = useStore()
 
   const allGoals = getGoalsWithProgress()
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
   const balance = getBalance()
+  const totalSavings = getTotalSavings()
   const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions])
 
   // Budget alerts - expense limits approaching or over
@@ -126,11 +128,17 @@ export default function Dashboard() {
               <p className="text-white/80 text-sm font-medium mb-1">Saldo do Casal</p>
               <h2 className="text-3xl font-bold mb-2">{displayValue(balance)}</h2>
               {transactions.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <div className={`flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-0.5`}>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-0.5">
                     <TrendingUp className="w-3.5 h-3.5" />
                     <span className="text-xs font-semibold">{transactions.length} transações</span>
                   </div>
+                  {totalSavings > 0 && (
+                    <div className="flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-0.5">
+                      <PiggyBank className="w-3.5 h-3.5" />
+                      <span className="text-xs font-semibold">{privacyMode ? '••••' : formatCurrency(totalSavings)} guardado</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -287,8 +295,9 @@ export default function Dashboard() {
               <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {recentTransactions.map((transaction, index) => {
                   const cat = CATEGORIES[transaction.category] || CATEGORIES.outros
-                  const IconComponent = ICON_MAP[cat.icon] || MoreHorizontal
+                  const IconComponent = ICON_MAP[cat?.icon] || AllLucideIcons[cat?.icon] || MoreHorizontal
                   const isIncome = transaction.amount > 0
+                  const isSavings = transaction.transactionType === 'savings'
 
                   return (
                     <motion.button
@@ -301,9 +310,12 @@ export default function Dashboard() {
                     >
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: cat.color + '18', color: cat.color }}
+                        style={{
+                          backgroundColor: isSavings ? '#8b5cf615' : (cat?.color + '18'),
+                          color: isSavings ? '#8b5cf6' : cat?.color
+                        }}
                       >
-                        <IconComponent className="w-5 h-5" />
+                        {isSavings ? <PiggyBank className="w-5 h-5" /> : <IconComponent className="w-5 h-5" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
@@ -313,14 +325,23 @@ export default function Dashboard() {
                           <p className="text-xs text-slate-500 dark:text-slate-400">
                             {formatDate(transaction.date)}
                           </p>
-                          {transaction.isShared && (
+                          {isSavings && (
+                            <Badge variant="brand" className="!text-[10px] !px-1.5 !py-0 !bg-violet-100 !text-violet-600 dark:!bg-violet-900/30 dark:!text-violet-400">
+                              Economia
+                            </Badge>
+                          )}
+                          {transaction.isShared && !isSavings && (
                             <Badge variant="brand" className="!text-[10px] !px-1.5 !py-0">
                               Conjunto
                             </Badge>
                           )}
                         </div>
                       </div>
-                      <p className={`text-sm font-bold shrink-0 ${isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                      <p className={`text-sm font-bold shrink-0 ${
+                        isSavings ? 'text-violet-500 dark:text-violet-400' :
+                        isIncome ? 'text-emerald-600 dark:text-emerald-400' :
+                        'text-red-500 dark:text-red-400'
+                      }`}>
                         {privacyMode ? '••••' : (isIncome ? '+' : '') + formatCurrency(transaction.amount)}
                       </p>
                     </motion.button>

@@ -1,20 +1,21 @@
 import { useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { Camera, Delete, Check } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Camera, Delete, Check, Plus, X } from 'lucide-react'
+import * as LucideIcons from 'lucide-react'
 import {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
   Heart, GraduationCap, ShoppingBag, CreditCard, TrendingUp,
-  Wallet, Briefcase, Gift, Plane, MoreHorizontal
+  Wallet, Briefcase, Gift, Plane, MoreHorizontal, PiggyBank
 } from 'lucide-react'
-import { Button, Toggle, TabBar, Avatar } from '../../components/ui'
+import { Button, Toggle, TabBar, Avatar, Input } from '../../components/ui'
 import useStore from '../../lib/store'
 import { addTransaction } from '../../lib/firebase'
-import { CATEGORY_LIST, CATEGORIES, formatCurrency } from '../../lib/utils'
+import { getCategoryList, CATEGORIES, formatCurrency, addCustomCategory, CUSTOM_CATEGORY_COLORS, CUSTOM_CATEGORY_ICONS } from '../../lib/utils'
 
 const ICON_MAP = {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
   Heart, GraduationCap, ShoppingBag, CreditCard, TrendingUp,
-  Wallet, Briefcase, Gift, Plane, MoreHorizontal
+  Wallet, Briefcase, Gift, Plane, MoreHorizontal, PiggyBank
 }
 
 const NUM_KEYS = [
@@ -33,11 +34,21 @@ export default function AddTransaction({ onClose }) {
   const [paidBy, setPaidBy] = useState('user') // 'user' or 'partner'
   const [saving, setSaving] = useState(false)
 
+  // Custom category form
+  const [showNewCategory, setShowNewCategory] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatColor, setNewCatColor] = useState(CUSTOM_CATEGORY_COLORS[0])
+  const [newCatIcon, setNewCatIcon] = useState('ShoppingCart')
+  const [catRefresh, setCatRefresh] = useState(0)
+
   const userName = user?.displayName || 'Eu'
   const partnerName = partner?.displayName || 'Parceiro(a)'
 
   const parsedAmount = parseFloat(amountStr) || 0
   const displayAmount = formatCurrency(parsedAmount / 100)
+
+  // Refresh category list when custom categories change
+  const categories = getCategoryList()
 
   const handleKey = useCallback((key) => {
     if (key === 'del') {
@@ -53,12 +64,32 @@ export default function AddTransaction({ onClose }) {
     }
   }, [])
 
+  const handleAddCustomCategory = () => {
+    if (!newCatName.trim()) return
+    const key = newCatName.trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+    if (!key) return
+
+    addCustomCategory(key, {
+      label: newCatName.trim(),
+      icon: newCatIcon,
+      color: newCatColor
+    })
+
+    setCategory(key)
+    setShowNewCategory(false)
+    setNewCatName('')
+    setCatRefresh(prev => prev + 1) // trigger re-render
+  }
+
   const handleConfirm = async () => {
     if (parsedAmount === 0 || !coupleId || saving) return
     setSaving(true)
 
     const finalAmount = parsedAmount / 100
-    const signedAmount = tab === 'expense' ? -Math.abs(finalAmount) : Math.abs(finalAmount)
+    const isSavings = tab === 'savings'
+    const signedAmount = tab === 'income' ? Math.abs(finalAmount) : -Math.abs(finalAmount)
     const cat = CATEGORIES[category]
 
     const selectedUid = paidBy === 'partner' && partner ? partner.uid : user.uid
@@ -66,9 +97,10 @@ export default function AddTransaction({ onClose }) {
 
     try {
       await addTransaction(coupleId, {
-        description: cat?.label || 'Transação',
+        description: isSavings ? `Economia: ${cat?.label || 'Poupança'}` : (cat?.label || 'Transação'),
         amount: signedAmount,
         category,
+        transactionType: isSavings ? 'savings' : (tab === 'income' ? 'income' : 'expense'),
         date: new Date(),
         paidBy: selectedUid,
         paidByName: selectedName,
@@ -80,7 +112,7 @@ export default function AddTransaction({ onClose }) {
       })
 
       onClose()
-      setShowSuccess({ amount: signedAmount, category })
+      setShowSuccess({ amount: signedAmount, category, transactionType: isSavings ? 'savings' : undefined })
 
       // Reset form
       setAmountStr('0')
@@ -96,19 +128,26 @@ export default function AddTransaction({ onClose }) {
     }
   }
 
+  const amountLabel = tab === 'expense' ? 'Valor da Despesa' : tab === 'income' ? 'Valor da Receita' : 'Valor da Economia'
+  const amountColor = tab === 'expense'
+    ? 'text-slate-900 dark:text-white'
+    : tab === 'income'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : 'text-violet-600 dark:text-violet-400'
+
   return (
     <div className="space-y-5">
       {/* Amount Display + Camera */}
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-1 font-medium">
-            {tab === 'expense' ? 'Valor da Despesa' : 'Valor da Receita'}
+            {amountLabel}
           </p>
           <motion.p
-            key={amountStr}
+            key={amountStr + tab}
             initial={{ scale: 1.05 }}
             animate={{ scale: 1 }}
-            className={`text-3xl font-bold ${tab === 'expense' ? 'text-slate-900 dark:text-white' : 'text-emerald-600 dark:text-emerald-400'}`}
+            className={`text-3xl font-bold ${amountColor}`}
           >
             {displayAmount}
           </motion.p>
@@ -118,11 +157,12 @@ export default function AddTransaction({ onClose }) {
         </button>
       </div>
 
-      {/* Expense / Income Tab */}
+      {/* Expense / Income / Savings Tab */}
       <TabBar
         tabs={[
           { key: 'expense', label: 'Despesa' },
-          { key: 'income', label: 'Receita' }
+          { key: 'income', label: 'Receita' },
+          { key: 'savings', label: 'Economia' }
         ]}
         active={tab}
         onChange={setTab}
@@ -132,8 +172,8 @@ export default function AddTransaction({ onClose }) {
       <div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">Categoria</p>
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 hide-scrollbar">
-          {CATEGORY_LIST.map((cat) => {
-            const IconComp = ICON_MAP[cat.icon] || MoreHorizontal
+          {categories.map((cat) => {
+            const IconComp = ICON_MAP[cat.icon] || LucideIcons[cat.icon] || MoreHorizontal
             const isSelected = category === cat.key
             return (
               <motion.button
@@ -142,7 +182,9 @@ export default function AddTransaction({ onClose }) {
                 onClick={() => setCategory(cat.key)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
                   isSelected
-                    ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
+                    ? tab === 'savings'
+                      ? 'bg-violet-500 text-white shadow-md shadow-violet-500/25'
+                      : 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                 }`}
               >
@@ -151,27 +193,112 @@ export default function AddTransaction({ onClose }) {
               </motion.button>
             )
           })}
+          {/* Add custom category button */}
+          <motion.button
+            whileTap={{ scale: 0.93 }}
+            onClick={() => setShowNewCategory(true)}
+            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-brand-400 hover:text-brand-500 transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Nova
+          </motion.button>
         </div>
       </div>
+
+      {/* New Category Form */}
+      <AnimatePresence>
+        {showNewCategory && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 space-y-3 border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Nova Categoria</p>
+                <button onClick={() => setShowNewCategory(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder="Nome da categoria"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                className="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+              />
+              {/* Color picker */}
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1.5 font-medium">Cor</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {CUSTOM_CATEGORY_COLORS.slice(0, 12).map(color => (
+                    <button
+                      key={color}
+                      onClick={() => setNewCatColor(color)}
+                      className={`w-7 h-7 rounded-full transition-all ${newCatColor === color ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-800' : ''}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+              {/* Icon picker */}
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1.5 font-medium">Icone</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {CUSTOM_CATEGORY_ICONS.slice(0, 15).map(iconName => {
+                    const Ic = LucideIcons[iconName] || MoreHorizontal
+                    return (
+                      <button
+                        key={iconName}
+                        onClick={() => setNewCatIcon(iconName)}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                          newCatIcon === iconName
+                            ? 'text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                        }`}
+                        style={newCatIcon === iconName ? { backgroundColor: newCatColor } : {}}
+                      >
+                        <Ic className="w-4 h-4" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <button
+                onClick={handleAddCustomCategory}
+                disabled={!newCatName.trim()}
+                className="w-full py-2 bg-brand-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50 hover:bg-brand-600 transition-colors"
+              >
+                Adicionar Categoria
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Shared toggle */}
       <Toggle
         checked={isShared}
         onChange={setIsShared}
-        label="Despesa Conjunta"
-        description="Dividir entre o casal"
+        label={tab === 'savings' ? 'Economia Conjunta' : 'Despesa Conjunta'}
+        description={tab === 'savings' ? 'Economia compartilhada pelo casal' : 'Dividir entre o casal'}
       />
 
       {/* Who paid selector */}
       <div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">Quem pagou?</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">
+          {tab === 'savings' ? 'Quem está economizando?' : 'Quem pagou?'}
+        </p>
         <div className="flex gap-2">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setPaidBy('user')}
             className={`flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               paidBy === 'user'
-                ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
+                ? tab === 'savings'
+                  ? 'bg-violet-500 text-white shadow-md shadow-violet-500/25'
+                  : 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
                 : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
             }`}
           >
@@ -222,9 +349,10 @@ export default function AddTransaction({ onClose }) {
         onClick={handleConfirm}
         disabled={parsedAmount === 0 || saving}
         loading={saving}
-        icon={Check}
+        icon={tab === 'savings' ? PiggyBank : Check}
+        className={tab === 'savings' ? '!bg-violet-500 hover:!bg-violet-600' : ''}
       >
-        Confirmar
+        {tab === 'savings' ? 'Guardar' : 'Confirmar'}
       </Button>
     </div>
   )

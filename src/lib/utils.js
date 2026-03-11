@@ -48,8 +48,8 @@ export const getMonthDays = (date) => {
   return eachDayOfInterval({ start, end })
 }
 
-// Category definitions
-export const CATEGORIES = {
+// Category definitions (base)
+const BASE_CATEGORIES = {
   mercado: { label: 'Mercado', icon: 'ShoppingCart', color: '#f97316' },
   restaurante: { label: 'Restaurantes', icon: 'UtensilsCrossed', color: '#ef4444' },
   transporte: { label: 'Transporte', icon: 'Car', color: '#8b5cf6' },
@@ -67,7 +67,67 @@ export const CATEGORIES = {
   outros: { label: 'Outros', icon: 'MoreHorizontal', color: '#64748b' }
 }
 
-export const CATEGORY_LIST = Object.entries(CATEGORIES).map(([key, val]) => ({ key, ...val }))
+// Custom categories from localStorage
+const getCustomCategories = () => {
+  try { return JSON.parse(localStorage.getItem('customCategories') || '{}') }
+  catch { return {} }
+}
+
+export const addCustomCategory = (key, data) => {
+  const custom = getCustomCategories()
+  custom[key] = data
+  localStorage.setItem('customCategories', JSON.stringify(custom))
+}
+
+export const removeCustomCategory = (key) => {
+  const custom = getCustomCategories()
+  delete custom[key]
+  localStorage.setItem('customCategories', JSON.stringify(custom))
+}
+
+// CATEGORIES proxy: merges base + custom transparently
+export const CATEGORIES = new Proxy(BASE_CATEGORIES, {
+  get(target, prop) {
+    if (typeof prop === 'symbol') return Reflect.get(target, prop)
+    return target[prop] || getCustomCategories()[prop]
+  },
+  ownKeys() {
+    return [...new Set([...Object.keys(BASE_CATEGORIES), ...Object.keys(getCustomCategories())])]
+  },
+  getOwnPropertyDescriptor(_, prop) {
+    const val = BASE_CATEGORIES[prop] || getCustomCategories()[prop]
+    if (val) return { configurable: true, enumerable: true, value: val, writable: true }
+    return undefined
+  },
+  has(_, prop) {
+    return prop in BASE_CATEGORIES || prop in getCustomCategories()
+  }
+})
+
+// Dynamic category list (always includes custom)
+export const getCategoryList = () =>
+  Object.entries(CATEGORIES).map(([key, val]) => ({ key, ...val }))
+
+// Static list for backward compat (base only)
+export const CATEGORY_LIST = Object.entries(BASE_CATEGORIES).map(([key, val]) => ({ key, ...val }))
+
+// Preset colors for custom categories
+export const CUSTOM_CATEGORY_COLORS = [
+  '#f97316', '#ef4444', '#8b5cf6', '#3b82f6', '#10b981',
+  '#ec4899', '#06b6d4', '#f59e0b', '#6366f1', '#14b8a6',
+  '#22c55e', '#a855f7', '#f43f5e', '#0ea5e9', '#64748b',
+  '#dc2626', '#059669', '#7c3aed', '#2563eb', '#d97706'
+]
+
+// Preset icons for custom categories
+export const CUSTOM_CATEGORY_ICONS = [
+  'ShoppingCart', 'UtensilsCrossed', 'Car', 'Home', 'Gamepad2',
+  'Heart', 'GraduationCap', 'ShoppingBag', 'CreditCard', 'TrendingUp',
+  'Wallet', 'Briefcase', 'Gift', 'Plane', 'MoreHorizontal',
+  'Coffee', 'Dumbbell', 'Music', 'Book', 'Smartphone',
+  'Tv', 'Baby', 'Dog', 'Fuel', 'Wrench',
+  'Shirt', 'Pizza', 'Wine', 'Palette', 'Camera'
+]
 
 // Progress bar color based on percentage
 export const getProgressColor = (percent) => {
@@ -130,7 +190,9 @@ export const DEMO_TRANSACTIONS = [
   { id: 'd7', description: 'Spotify Family', amount: -34.90, category: 'assinatura', date: new Date(Date.now() - 86400000 * 7), paidBy: 'user2', isShared: true, merchant: 'Spotify' },
   { id: 'd8', description: 'Farmácia', amount: -67.80, category: 'saude', date: new Date(Date.now() - 86400000 * 8), paidBy: 'user2', isShared: true, merchant: 'Drogasil' },
   { id: 'd9', description: 'Cinema', amount: -85.00, category: 'lazer', date: new Date(Date.now() - 86400000 * 10), paidBy: 'user1', isShared: true, merchant: 'Cinemark' },
-  { id: 'd10', description: 'Salário', amount: 4000.00, category: 'salario', date: new Date(Date.now() - 86400000 * 5), paidBy: 'user2', isShared: false, merchant: '' }
+  { id: 'd10', description: 'Salário', amount: 4000.00, category: 'salario', date: new Date(Date.now() - 86400000 * 5), paidBy: 'user2', isShared: false, merchant: '' },
+  { id: 'd11', description: 'Economia: Viagem', amount: -500.00, category: 'viagem', date: new Date(Date.now() - 86400000 * 3), paidBy: 'user1', isShared: true, merchant: '', transactionType: 'savings' },
+  { id: 'd12', description: 'Economia: Reserva', amount: -300.00, category: 'outros', date: new Date(Date.now() - 86400000 * 6), paidBy: 'user2', isShared: true, merchant: '', transactionType: 'savings' }
 ]
 
 export const DEMO_BUDGETS = [

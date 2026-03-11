@@ -46,8 +46,9 @@ export default function TransactionDetail() {
   }
 
   const cat = CATEGORIES[transaction.category] || CATEGORIES.outros
-  const IconComponent = LucideIcons[cat.icon] || LucideIcons.MoreHorizontal
+  const IconComponent = LucideIcons[cat?.icon] || LucideIcons.MoreHorizontal
   const isExpense = transaction.amount < 0
+  const isSavings = transaction.transactionType === 'savings'
   const transactionDate = toDate(transaction.date || transaction.createdAt)
 
   const handleDelete = async () => {
@@ -150,13 +151,21 @@ export default function TransactionDetail() {
                   {transaction.merchant}
                 </p>
               )}
-              <p className={`text-3xl font-bold ${isExpense ? 'text-red-500' : 'text-emerald-500'}`}>
+              <p className={`text-3xl font-bold ${
+                isSavings ? 'text-violet-500' : isExpense ? 'text-red-500' : 'text-emerald-500'
+              }`}>
                 {privacyMode ? '••••••' : formatCurrency(transaction.amount)}
               </p>
-              <div className="mt-3">
-                <Badge variant={isExpense ? 'danger' : 'success'}>
-                  {cat.label}
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <Badge variant={isSavings ? 'brand' : isExpense ? 'danger' : 'success'}
+                  className={isSavings ? '!bg-violet-100 !text-violet-600 dark:!bg-violet-900/30 dark:!text-violet-400' : ''}>
+                  {cat?.label || transaction.category}
                 </Badge>
+                {isSavings && (
+                  <Badge variant="brand" className="!bg-violet-100 !text-violet-600 dark:!bg-violet-900/30 dark:!text-violet-400">
+                    Economia
+                  </Badge>
+                )}
               </div>
             </div>
           </Card>

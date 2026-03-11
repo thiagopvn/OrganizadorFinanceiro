@@ -87,21 +87,21 @@ const useStore = create((set, get) => ({
 
   // Computed values
   getTotalIncome: () => get().transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
-  getTotalExpenses: () => get().transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0),
+  getTotalExpenses: () => get().transactions.filter(t => t.amount < 0 && t.transactionType !== 'savings').reduce((sum, t) => sum + Math.abs(t.amount), 0),
+  getTotalSavings: () => get().transactions.filter(t => t.transactionType === 'savings').reduce((sum, t) => sum + Math.abs(t.amount), 0),
   getBalance: () => get().transactions.reduce((sum, t) => sum + t.amount, 0),
   getNetWorth: () => {
-    // Net worth = soma de todas as transações (receitas - despesas)
     return get().transactions.reduce((sum, t) => sum + t.amount, 0)
   },
   getCategoryTotals: () => {
     const totals = {}
-    get().transactions.filter(t => t.amount < 0).forEach(t => {
+    get().transactions.filter(t => t.amount < 0 && t.transactionType !== 'savings').forEach(t => {
       totals[t.category] = (totals[t.category] || 0) + Math.abs(t.amount)
     })
     return totals
   },
 
-  // Budgets with spent calculated from current month transactions
+  // Budgets with spent calculated from current month transactions (excludes savings)
   getBudgetsWithSpent: () => {
     const now = new Date()
     const currentMonth = now.getMonth()
@@ -111,7 +111,7 @@ const useStore = create((set, get) => ({
 
     const monthlySpent = {}
     transactions.forEach(t => {
-      if (t.amount >= 0) return
+      if (t.amount >= 0 || t.transactionType === 'savings') return
       const d = t.date?.toDate ? t.date.toDate() : (t.date instanceof Date ? t.date : new Date(t.date || t.createdAt?.toDate?.() || t.createdAt))
       if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
         monthlySpent[t.category] = (monthlySpent[t.category] || 0) + Math.abs(t.amount)
@@ -133,33 +133,77 @@ const useStore = create((set, get) => ({
     const goals = get().goals
     const budgets = get().budgets
 
-    // Monthly expenses per category
+    // Calculate start of current week (Monday)
+    const weekStart = new Date(now)
+    const dayOfWeek = weekStart.getDay()
+    const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Monday = 0
+    weekStart.setDate(weekStart.getDate() - diff)
+    weekStart.setHours(0, 0, 0, 0)
+
+    // Aggregators per period
     const monthlyExpenses = {}
-    // Monthly income per category
     const monthlyIncome = {}
+    const weeklySavings = {}
+    const monthlySavings = {}
+    const allTimeSavings = {}
+    const weeklyExpenses = {}
+    const weeklyIncome = {}
 
     transactions.forEach(t => {
       const d = t.date?.toDate ? t.date.toDate() : (t.date instanceof Date ? t.date : new Date(t.date || t.createdAt?.toDate?.() || t.createdAt))
-      if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) return
-      if (t.amount < 0) {
-        monthlyExpenses[t.category] = (monthlyExpenses[t.category] || 0) + Math.abs(t.amount)
+      const isCurrentMonth = d.getMonth() === currentMonth && d.getFullYear() === currentYear
+      const isCurrentWeek = d >= weekStart && d <= now
+
+      if (t.transactionType === 'savings') {
+        const amt = Math.abs(t.amount)
+        allTimeSavings[t.category] = (allTimeSavings[t.category] || 0) + amt
+        if (isCurrentMonth) {
+          monthlySavings[t.category] = (monthlySavings[t.category] || 0) + amt
+        }
+        if (isCurrentWeek) {
+          weeklySavings[t.category] = (weeklySavings[t.category] || 0) + amt
+        }
+      } else if (t.amount < 0) {
+        if (isCurrentMonth) {
+          monthlyExpenses[t.category] = (monthlyExpenses[t.category] || 0) + Math.abs(t.amount)
+        }
+        if (isCurrentWeek) {
+          weeklyExpenses[t.category] = (weeklyExpenses[t.category] || 0) + Math.abs(t.amount)
+        }
       } else {
-        monthlyIncome[t.category] = (monthlyIncome[t.category] || 0) + t.amount
+        if (isCurrentMonth) {
+          monthlyIncome[t.category] = (monthlyIncome[t.category] || 0) + t.amount
+        }
+        if (isCurrentWeek) {
+          weeklyIncome[t.category] = (weeklyIncome[t.category] || 0) + t.amount
+        }
       }
     })
 
     // Process goals from goals subcollection
     const processedGoals = goals.map(g => {
       const type = g.type || 'savings'
+      const period = g.period || 'monthly'
       let currentAmount = 0
 
       if (type === 'expense_limit') {
-        currentAmount = monthlyExpenses[g.category] || 0
+        currentAmount = period === 'weekly'
+          ? (weeklyExpenses[g.category] || 0)
+          : (monthlyExpenses[g.category] || 0)
       } else if (type === 'income_goal') {
-        currentAmount = monthlyIncome[g.category] || 0
+        currentAmount = period === 'weekly'
+          ? (weeklyIncome[g.category] || 0)
+          : (monthlyIncome[g.category] || 0)
       } else {
-        // savings - use stored currentAmount
-        currentAmount = g.currentAmount || 0
+        // savings - compute from savings transactions
+        if (period === 'weekly') {
+          currentAmount = weeklySavings[g.category] || 0
+        } else if (period === 'monthly') {
+          currentAmount = monthlySavings[g.category] || 0
+        } else {
+          // custom/no deadline - all time savings for this category + manual deposits
+          currentAmount = (allTimeSavings[g.category] || 0) + (g.currentAmount || 0)
+        }
       }
 
       const percent = g.targetAmount > 0 ? Math.round((currentAmount / g.targetAmount) * 100) : 0
