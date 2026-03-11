@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import useStore from './lib/store'
 import {
-  onAuthChange, db, doc, getDoc, setDoc, collection, query, where,
+  onAuthChange, db, doc, getDoc, setDoc, updateDoc, collection, query, where,
   getDocs, serverTimestamp, onSnapshot, orderBy,
   subscribeToTransactions, subscribeToBudgets, subscribeToGoals, subscribeToSubscriptions,
   subscribeToSettlements, subscribeToCards, subscribeToInvestments,
@@ -110,10 +110,23 @@ export default function App() {
       const unsubCouple = onSnapshot(doc(db, 'couples', coupleId), async (coupleSnap) => {
         if (coupleSnap.exists()) {
           const coupleData = { id: coupleId, ...coupleSnap.data() }
+
+          // Auto-fix: deduplicate partnerIds if corrupted (same UID twice)
+          const partnerIds = coupleData.partnerIds || []
+          const uniqueIds = [...new Set(partnerIds)]
+          if (uniqueIds.length !== partnerIds.length) {
+            try {
+              await updateDoc(doc(db, 'couples', coupleId), { partnerIds: uniqueIds })
+            } catch (e) {
+              console.warn('Erro ao corrigir partnerIds duplicados:', e)
+            }
+            return // onSnapshot will fire again with corrected data
+          }
+
           setCouple(coupleData)
 
           // Load partner profile
-          const partnerUid = coupleData.partnerIds?.find(id => id !== firebaseUser.uid)
+          const partnerUid = uniqueIds.find(id => id !== firebaseUser.uid)
           if (partnerUid) {
             const currentPartner = useStore.getState().partner
             // Only fetch partner if not loaded or UID changed
@@ -123,6 +136,9 @@ export default function App() {
                 setPartner({ uid: partnerUid, ...partnerSnap.data() })
               }
             }
+          } else {
+            // No partner yet — clear stale partner data
+            setPartner(null)
           }
         }
       })
