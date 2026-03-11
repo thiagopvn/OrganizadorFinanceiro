@@ -84,6 +84,16 @@ export default function App() {
       // 2. Find or create couple
       let coupleId = userProfile.coupleId
 
+      // Validate that the coupleId still exists in Firestore
+      if (coupleId) {
+        const coupleCheck = await getDoc(doc(db, 'couples', coupleId))
+        if (!coupleCheck.exists()) {
+          // Couple was deleted — clear the stale reference
+          coupleId = null
+          await setDoc(userRef, { coupleId: null }, { merge: true })
+        }
+      }
+
       if (!coupleId) {
         // Check if there's already a couple that has this user
         const couplesQuery = query(
@@ -110,15 +120,23 @@ export default function App() {
       const unsubCouple = onSnapshot(doc(db, 'couples', coupleId), async (coupleSnap) => {
         if (coupleSnap.exists()) {
           const coupleData = { id: coupleId, ...coupleSnap.data() }
+          const partnerIds = coupleData.partnerIds || []
 
           // Auto-fix: deduplicate partnerIds if corrupted (same UID twice)
-          const partnerIds = coupleData.partnerIds || []
           const uniqueIds = [...new Set(partnerIds)]
-          if (uniqueIds.length !== partnerIds.length) {
+          let needsUpdate = uniqueIds.length !== partnerIds.length
+
+          // Auto-fix: if current user has this coupleId but isn't in partnerIds, add them
+          if (!uniqueIds.includes(firebaseUser.uid)) {
+            uniqueIds.push(firebaseUser.uid)
+            needsUpdate = true
+          }
+
+          if (needsUpdate && uniqueIds.length <= 2) {
             try {
               await updateDoc(doc(db, 'couples', coupleId), { partnerIds: uniqueIds })
             } catch (e) {
-              console.warn('Erro ao corrigir partnerIds duplicados:', e)
+              console.warn('Erro ao corrigir partnerIds:', e)
             }
             return // onSnapshot will fire again with corrected data
           }
