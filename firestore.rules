@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can only read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Couple data - only members can access
+    match /couples/{coupleId} {
+      allow read, write: if request.auth != null &&
+        request.auth.uid in resource.data.partnerIds;
+      allow create: if request.auth != null;
+
+      // All subcollections inherit couple access
+      match /transactions/{docId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerIds;
+      }
+
+      match /budgets/{docId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerIds;
+      }
+
+      match /goals/{docId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerIds;
+      }
+
+      match /subscriptions/{docId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerIds;
+      }
+
+      match /settlements/{docId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerIds;
+      }
+
+      match /cards/{docId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerIds;
+      }
+
+      match /investments/{docId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/couples/$(coupleId)).data.partnerIds;
+      }
+    }
+
+    // Notifications - user can only see their own
+    match /notifications/{notificationId} {
+      allow read, update: if request.auth != null &&
+        request.auth.uid == resource.data.userId;
+      allow create: if false; // Only Cloud Functions write notifications
+    }
+  }
+}
