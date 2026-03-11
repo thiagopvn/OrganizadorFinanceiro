@@ -127,7 +127,7 @@ export default function Dashboard() {
         <motion.div variants={itemVariants}>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { icon: Scissors, label: 'Split', path: '/app/split', color: 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400' },
+              { icon: Scissors, label: 'Divisão', path: '/app/split', color: 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400' },
               { icon: CreditCard, label: 'Cartões', path: '/app/cards', color: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' },
               { icon: BarChart3, label: 'Investimentos', path: '/app/investments', color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' }
             ].map((action) => (

@@ -6,44 +6,38 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Button, Card, SectionHeader } from '../../components/ui'
+import useStore from '../../lib/store'
 import { formatCurrency } from '../../lib/utils'
 
 const SPLIT_OPTIONS = [
   {
     id: 'proportional',
     icon: Scale,
-    title: 'Divisao Proporcional',
-    description: 'Contribuicoes baseadas na renda individual (ex: 60/40)',
+    title: 'Divisão Proporcional',
+    description: 'Contribuições baseadas na renda individual (ex: 60/40)',
   },
   {
     id: 'equal',
     icon: Equal,
-    title: 'Divisao 50/50',
-    description: 'Ambos contribuem igualmente todo mes',
+    title: 'Divisão 50/50',
+    description: 'Ambos contribuem igualmente todo mês',
   },
   {
     id: 'custom',
     icon: Sliders,
-    title: 'Contribuicao Personalizada',
+    title: 'Contribuição Personalizada',
     description: 'Defina valores fixos para cada parceiro',
   },
 ]
 
-const SHARED_CATEGORIES = [
-  { id: 'rent', label: 'Aluguel', icon: Home, total: 2500 },
-  { id: 'groceries', label: 'Mercado', icon: ShoppingCart, total: 1200 },
-  { id: 'savings', label: 'Poupanca Conjunta', icon: PiggyBank, total: 1000 },
-]
-
 export default function SplitConfig() {
   const navigate = useNavigate()
+  const { user, partner } = useStore()
   const [selectedOption, setSelectedOption] = useState('proportional')
-  const [sliderValue, setSliderValue] = useState(60)
+  const [sliderValue, setSliderValue] = useState(50)
 
-  const partnerAName = 'Joao'
-  const partnerBName = 'Maria'
-  const partnerAIncome = 6000
-  const partnerBIncome = 4000
+  const partnerAName = user?.displayName || 'Você'
+  const partnerBName = partner?.displayName || 'Parceiro(a)'
 
   const partnerAPercent = selectedOption === 'equal' ? 50 : sliderValue
   const partnerBPercent = 100 - partnerAPercent
@@ -66,7 +60,7 @@ export default function SplitConfig() {
             Filosofia Financeira
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Decida como voce e seu parceiro vao contribuir para as despesas compartilhadas.
+            Decida como você e seu parceiro vão contribuir para as despesas compartilhadas.
           </p>
         </motion.div>
 
@@ -136,7 +130,7 @@ export default function SplitConfig() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <SectionHeader title="Ajustar Contribuicao" />
+            <SectionHeader title="Ajustar Contribuição" />
             <Card>
               {/* Slider */}
               <div className="mb-4">
@@ -170,7 +164,7 @@ export default function SplitConfig() {
                 />
               </div>
 
-              {/* Income display */}
+              {/* Partner display */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between py-2 px-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
                   <div className="flex items-center gap-2">
@@ -178,7 +172,7 @@ export default function SplitConfig() {
                     <span className="text-sm text-slate-700 dark:text-slate-300">{partnerAName}</span>
                   </div>
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                    Renda: {formatCurrency(partnerAIncome)}
+                    {partnerAPercent}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-2 px-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
@@ -187,62 +181,13 @@ export default function SplitConfig() {
                     <span className="text-sm text-slate-700 dark:text-slate-300">{partnerBName}</span>
                   </div>
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                    Renda: {formatCurrency(partnerBIncome)}
+                    {partnerBPercent}%
                   </span>
                 </div>
               </div>
             </Card>
           </motion.div>
         )}
-
-        {/* Impacto no Orcamento */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-        >
-          <SectionHeader title="Impacto no Orcamento Compartilhado" />
-          <Card>
-            <div className="space-y-3">
-              {SHARED_CATEGORIES.map((cat, index) => {
-                const Icon = cat.icon
-                const amountA = (cat.total * partnerAPercent) / 100
-                const amountB = (cat.total * partnerBPercent) / 100
-
-                return (
-                  <div key={cat.id}>
-                    {index > 0 && (
-                      <div className="border-t border-slate-100 dark:border-slate-700/50 mb-3" />
-                    )}
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-900/20 flex items-center justify-center shrink-0">
-                        <Icon className="w-5 h-5 text-brand-500" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                            {cat.label}
-                          </p>
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                            {formatCurrency(cat.total)}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <p className="text-xs text-slate-500">
-                            {partnerAName}: {formatCurrency(amountA)}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {partnerBName}: {formatCurrency(amountB)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </Card>
-        </motion.div>
 
         {/* Confirm Button */}
         <motion.div
@@ -260,7 +205,7 @@ export default function SplitConfig() {
             Confirmar e Aplicar
           </Button>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center">
-            Alteracoes entram em vigor no proximo ciclo de cobranca.
+            Alterações entram em vigor no próximo ciclo de cobrança.
           </p>
         </motion.div>
       </div>
