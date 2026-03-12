@@ -1,17 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Shield, AlertTriangle } from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Button, Card, Toggle, SectionHeader } from '../../components/ui'
 import useStore from '../../lib/store'
+import { updatePrivacySettings } from '../../lib/firebase'
 
 export default function Privacy() {
-  const { privacyMode, togglePrivacyMode } = useStore()
+  const { privacyMode, togglePrivacyMode, user, userProfile } = useStore()
 
-  const [hideIndividualBalance, setHideIndividualBalance] = useState(false)
-  const [autoPrivateMode, setAutoPrivateMode] = useState(true)
+  const savedPrivacy = userProfile?.privacySettings || {}
+  const [hideIndividualBalance, setHideIndividualBalance] = useState(savedPrivacy.hideIndividualBalance ?? false)
+  const [autoPrivateMode, setAutoPrivateMode] = useState(savedPrivacy.autoPrivateMode ?? true)
+  const [saving, setSaving] = useState(false)
 
-  const [categorySharing, setCategorySharing] = useState({
+  const [categorySharing, setCategorySharing] = useState(savedPrivacy.categorySharing ?? {
     presentes: true,
     saude: true,
     alimentacao: true,
@@ -31,16 +34,45 @@ export default function Privacy() {
     })
   }
 
+  // Persist changes to Firebase
+  useEffect(() => {
+    if (!user?.uid) return
+    const timeout = setTimeout(async () => {
+      setSaving(true)
+      try {
+        await updatePrivacySettings(user.uid, {
+          hideIndividualBalance,
+          autoPrivateMode,
+          categorySharing
+        })
+      } catch (e) {
+        console.warn('Erro ao salvar privacidade:', e)
+      } finally {
+        setSaving(false)
+      }
+    }, 800) // Debounce 800ms
+    return () => clearTimeout(timeout)
+  }, [hideIndividualBalance, autoPrivateMode, categorySharing, user?.uid])
+
   const categoryLabels = {
     presentes: 'Presentes',
-    saude: 'Saude',
-    alimentacao: 'Alimentacao',
+    saude: 'Saúde',
+    alimentacao: 'Alimentação',
     compras_pessoais: 'Compras Pessoais',
   }
 
   return (
     <div className="pb-8">
-      <PageHeader title="Privacidade" />
+      <PageHeader
+        title="Privacidade"
+        actions={
+          saving && (
+            <span className="text-[10px] text-brand-500 font-semibold animate-pulse">
+              Salvando...
+            </span>
+          )
+        }
+      />
 
       <div className="px-5 space-y-6 mt-4">
         {/* Security Info Card */}
@@ -56,11 +88,11 @@ export default function Privacy() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  Seus dados estao seguros
+                  Seus dados estão seguros
                 </p>
                 <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                   O Unity Finance utiliza criptografia de ponta a ponta para proteger todas as
-                  suas informacoes financeiras. Nenhum dado pessoal e compartilhado com terceiros.
+                  suas informações financeiras. Nenhum dado pessoal é compartilhado com terceiros.
                 </p>
               </div>
             </div>
@@ -79,17 +111,17 @@ export default function Privacy() {
               checked={hideIndividualBalance}
               onChange={setHideIndividualBalance}
               label="Ocultar Saldo Individual"
-              description="Seu saldo pessoal nao sera visivel para o parceiro"
+              description="Seu saldo pessoal não será visível para o parceiro"
             />
             <div className="border-t border-slate-100 dark:border-slate-700/50 my-1" />
             <Toggle
               checked={autoPrivateMode}
               onChange={setAutoPrivateMode}
-              label="Modo Privado Automatico"
-              description="Ativar automaticamente ao detectar presenca de terceiros"
+              label="Modo Privado Automático"
+              description="Ativar automaticamente ao detectar presença de terceiros"
             />
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 px-1 leading-relaxed">
-              O modo privado automatico utiliza sensores do dispositivo para ocultar valores
+              O modo privado automático utiliza sensores do dispositivo para ocultar valores
               quando detecta que outra pessoa pode estar visualizando a tela.
             </p>
           </Card>
@@ -114,14 +146,15 @@ export default function Privacy() {
                   label={label}
                   description={
                     categorySharing[key]
-                      ? 'Visivel para o parceiro'
+                      ? 'Visível para o parceiro'
                       : 'Oculto do parceiro'
                   }
                 />
               </div>
             ))}
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3 px-1 leading-relaxed">
-              Gastos em categorias desativadas nao aparecerao na linha do tempo compartilhada.
+              Gastos em categorias desativadas não aparecerão na linha do tempo compartilhada.
+              As alterações são salvas automaticamente.
             </p>
           </Card>
         </motion.div>
@@ -142,7 +175,7 @@ export default function Privacy() {
             Interromper todo compartilhamento
           </Button>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-2">
-            Isso ocultara todas as suas transacoes da visualizacao do parceiro.
+            Isso ocultará todas as suas transações da visualização do parceiro.
           </p>
         </motion.div>
       </div>

@@ -167,6 +167,88 @@ export const toDate = (d) => {
 // Clamp number
 export const clamp = (num, min, max) => Math.min(Math.max(num, min), max)
 
+// ─── Financial Health Indicators ────────────────────────────────────
+
+export const FIXED_EXPENSE_CATEGORIES = ['moradia', 'assinatura', 'educacao', 'saude']
+
+export const calculateSavingsRate = (income, savings) => {
+  if (income <= 0) return 0
+  return Math.round((savings / income) * 100)
+}
+
+export const calculateFixedExpenseRatio = (fixedExpenses, income) => {
+  if (income <= 0) return 0
+  return Math.round((fixedExpenses / income) * 100)
+}
+
+export const calculateDebtRatio = (totalDebt, monthlyIncome) => {
+  if (monthlyIncome <= 0) return 0
+  return Math.round((totalDebt / monthlyIncome) * 100)
+}
+
+export const calculateFinancialScore = ({ savingsRate, fixedRatio, debtRatio, hasEmergencyFund }) => {
+  let score = 50
+  score += Math.min(savingsRate, 30)
+  score -= Math.max(0, fixedRatio - 50) * 0.5
+  score -= Math.min(debtRatio, 40) * 0.5
+  if (hasEmergencyFund) score += 10
+  return Math.max(0, Math.min(100, Math.round(score)))
+}
+
+export const getScoreLabel = (score) => {
+  if (score >= 80) return { label: 'Excelente', color: 'text-emerald-500', bg: 'bg-emerald-500' }
+  if (score >= 60) return { label: 'Bom', color: 'text-blue-500', bg: 'bg-blue-500' }
+  if (score >= 40) return { label: 'Regular', color: 'text-amber-500', bg: 'bg-amber-500' }
+  return { label: 'Atenção', color: 'text-red-500', bg: 'bg-red-500' }
+}
+
+// ─── Recurring Transaction Helpers ──────────────────────────────────
+
+export const RECURRENCE_OPTIONS = [
+  { key: 'weekly', label: 'Semanal', days: 7 },
+  { key: 'biweekly', label: 'Quinzenal', days: 14 },
+  { key: 'monthly', label: 'Mensal', days: 30 },
+  { key: 'yearly', label: 'Anual', days: 365 },
+]
+
+// ─── Travel / Currency Helpers ──────────────────────────────────────
+
+export const CURRENCIES = {
+  BRL: { code: 'BRL', symbol: 'R$', name: 'Real Brasileiro', flag: '🇧🇷' },
+  USD: { code: 'USD', symbol: 'US$', name: 'Dólar Americano', flag: '🇺🇸', rateToBRL: 5.05 },
+  EUR: { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺', rateToBRL: 5.50 },
+  GBP: { code: 'GBP', symbol: '£', name: 'Libra Esterlina', flag: '🇬🇧', rateToBRL: 6.35 },
+  ARS: { code: 'ARS', symbol: 'ARS$', name: 'Peso Argentino', flag: '🇦🇷', rateToBRL: 0.005 },
+  JPY: { code: 'JPY', symbol: '¥', name: 'Iene Japonês', flag: '🇯🇵', rateToBRL: 0.033 },
+  CLP: { code: 'CLP', symbol: 'CLP$', name: 'Peso Chileno', flag: '🇨🇱', rateToBRL: 0.0053 },
+  COP: { code: 'COP', symbol: 'COP$', name: 'Peso Colombiano', flag: '🇨🇴', rateToBRL: 0.0012 },
+  MXN: { code: 'MXN', symbol: 'MX$', name: 'Peso Mexicano', flag: '🇲🇽', rateToBRL: 0.29 },
+  UYU: { code: 'UYU', symbol: 'UY$', name: 'Peso Uruguaio', flag: '🇺🇾', rateToBRL: 0.12 },
+}
+
+export const convertCurrency = (amount, fromCurrency, toCurrency = 'BRL') => {
+  if (fromCurrency === toCurrency) return amount
+  const from = CURRENCIES[fromCurrency]
+  const to = CURRENCIES[toCurrency]
+  if (!from || !to) return amount
+  const inBRL = fromCurrency === 'BRL' ? amount : amount * (from.rateToBRL || 1)
+  if (toCurrency === 'BRL') return inBRL
+  return inBRL / (to.rateToBRL || 1)
+}
+
+// ─── Debt Helpers ───────────────────────────────────────────────────
+
+export const calculateMonthlyPayment = (principal, annualRate, months) => {
+  if (annualRate === 0) return principal / months
+  const r = annualRate / 100 / 12
+  return principal * (r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1)
+}
+
+export const calculateTotalInterest = (principal, annualRate, months) => {
+  const monthly = calculateMonthlyPayment(principal, annualRate, months)
+  return (monthly * months) - principal
+}
+
 // Group transactions by date
 export const groupByDate = (transactions) => {
   const groups = {}

@@ -39,7 +39,8 @@ export default function Analytics() {
   const {
     transactions, subscriptions, privacyMode, user, partner,
     globalFilters, setGlobalFilters, setDrillDown, setAddTransactionContext,
-    budgets, getBudgetsWithSpent, getGoalsWithProgress
+    budgets, getBudgetsWithSpent, getGoalsWithProgress,
+    getSmartInsights, getNetWorthHistory
   } = useStore()
 
   // Use global filters from store
@@ -971,6 +972,59 @@ export default function Analytics() {
                 )}
               </Card>
             </motion.div>
+
+            {/* ─── Smart Insights ───────────────── */}
+            {selectedPeriod === 'month' && (() => {
+              const insights = getSmartInsights()
+              if (insights.length === 0) return null
+              const INSIGHT_COLORS = {
+                warning: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50',
+                danger: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50',
+                success: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50',
+                info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/50',
+              }
+              const INSIGHT_TEXT = {
+                warning: 'text-amber-700 dark:text-amber-300',
+                danger: 'text-red-700 dark:text-red-300',
+                success: 'text-emerald-700 dark:text-emerald-300',
+                info: 'text-blue-700 dark:text-blue-300',
+              }
+              return (
+                <motion.div variants={item}>
+                  <Card>
+                    <SectionHeader title="Insights Inteligentes" />
+                    <div className="space-y-2">
+                      {insights.map((insight, i) => (
+                        <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${INSIGHT_COLORS[insight.type]}`}>
+                          <Zap className={`w-4 h-4 shrink-0 mt-0.5 ${INSIGHT_TEXT[insight.type]}`} />
+                          <div>
+                            <p className={`text-xs font-semibold ${INSIGHT_TEXT[insight.type]}`}>{insight.title}</p>
+                            <p className={`text-[11px] mt-0.5 ${INSIGHT_TEXT[insight.type]} opacity-80`}>{insight.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </motion.div>
+              )
+            })()}
+
+            {/* ─── Net Worth Evolution ────────────── */}
+            {selectedPeriod !== 'month' && selectedPeriod !== 'last_month' && (() => {
+              const history = getNetWorthHistory()
+              if (history.length < 2) return null
+              return (
+                <motion.div variants={item}>
+                  <Card>
+                    <SectionHeader title="Evolução Patrimonial" />
+                    <LineChart
+                      labels={history.map(h => h.label)}
+                      data={history.map(h => h.balance)}
+                    />
+                  </Card>
+                </motion.div>
+              )
+            })()}
 
             {/* Empty filtered state */}
             {hasData && !hasFilteredData && (

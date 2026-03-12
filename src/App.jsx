@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, Component } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import useStore from './lib/store'
 import {
@@ -6,6 +6,7 @@ import {
   collection, query, where, orderBy,
   subscribeToTransactions, subscribeToBudgets, subscribeToGoals, subscribeToSubscriptions,
   subscribeToSettlements, subscribeToCards, subscribeToInvestments,
+  subscribeToRecurringTransactions, subscribeToDebts,
   resolveCouple
 } from './lib/firebase'
 import { AppLayout } from './components/layout'
@@ -32,15 +33,59 @@ import Notifications from './pages/notifications/Notifications'
 import Export from './pages/export/Export'
 import ImportOFX from './pages/import/Import'
 import Wrapped from './pages/wrapped/Wrapped'
+import RecurringTransactions from './pages/recurring/RecurringTransactions'
+import Debts from './pages/debts/Debts'
+import MonthlyReport from './pages/reports/MonthlyReport'
 
 // Modals
 import { BottomSheet } from './components/ui'
 import { SuccessModal, AchievementModal } from './pages/modals/Modals'
 
+// Error Boundary
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('App Error:', error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-orange-50 dark:bg-slate-900 px-6">
+          <div className="text-center max-w-sm">
+            <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-2">Algo deu errado</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              Ocorreu um erro inesperado. Tente recarregar a página.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-3 bg-brand-500 text-white font-semibold rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-colors"
+            >
+              Recarregar
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 export default function App() {
   const {
     user, setUser, setUserProfile, setCoupleId, setCouple, setPartner,
     setTransactions, setBudgets, setGoals, setSubscriptions, setSettlements, setCards, setInvestments, setNotifications,
+    setRecurringTransactions, setDebts,
     setIsLoading, isLoading, initTheme, reset,
     showAddTransaction, setShowAddTransaction,
     showSuccess, setShowSuccess,
@@ -134,6 +179,8 @@ export default function App() {
       const unsubSettlements = subscribeToSettlements(coupleId, setSettlements)
       const unsubCards = subscribeToCards(coupleId, setCards)
       const unsubInvestments = subscribeToInvestments(coupleId, setInvestments)
+      const unsubRecurring = subscribeToRecurringTransactions(coupleId, setRecurringTransactions)
+      const unsubDebts = subscribeToDebts(coupleId, setDebts)
 
       // 5. Subscribe to notifications for this user
       const notifQuery = query(
@@ -147,7 +194,7 @@ export default function App() {
         console.warn('Listener notifications error:', err)
       })
 
-      unsubsRef.current = [unsubCouple, unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubSettlements, unsubCards, unsubInvestments, unsubNotif]
+      unsubsRef.current = [unsubCouple, unsubTx, unsubBudgets, unsubGoals, unsubSubs, unsubSettlements, unsubCards, unsubInvestments, unsubRecurring, unsubDebts, unsubNotif]
 
     } catch (e) {
       console.error('Erro ao inicializar dados do usuário:', e)
@@ -156,7 +203,7 @@ export default function App() {
     }
   }, [cleanupListeners, setCoupleId, setCouple, setPartner, setUserProfile,
       setTransactions, setBudgets, setGoals, setSubscriptions, setSettlements,
-      setCards, setInvestments, setNotifications])
+      setCards, setInvestments, setRecurringTransactions, setDebts, setNotifications])
 
   useEffect(() => {
     initTheme()
@@ -205,7 +252,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/app/home" replace /> : <Login />} />
         <Route path="/register" element={user ? <Navigate to="/app/home" replace /> : <Register />} />
@@ -230,6 +277,9 @@ export default function App() {
           <Route path="export" element={<Export />} />
           <Route path="import" element={<ImportOFX />} />
           <Route path="wrapped" element={<Wrapped />} />
+          <Route path="recurring" element={<RecurringTransactions />} />
+          <Route path="debts" element={<Debts />} />
+          <Route path="reports" element={<MonthlyReport />} />
         </Route>
 
         <Route path="*" element={<Navigate to={user ? "/app/home" : "/login"} replace />} />
@@ -245,6 +295,6 @@ export default function App() {
 
       <SuccessModal data={showSuccess} onClose={() => setShowSuccess(null)} />
       <AchievementModal data={showAchievement} onClose={() => setShowAchievement(null)} />
-    </>
+    </ErrorBoundary>
   )
 }

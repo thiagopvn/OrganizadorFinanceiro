@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield, Fingerprint, Plane, Settings, Bell, Moon,
   FileText, Sparkles, Lock, HelpCircle, LogOut, ChevronRight,
-  UserPlus, Copy, Check, Link2, X, Heart, Upload
+  UserPlus, Copy, Check, Link2, X, Heart, Upload,
+  RefreshCw, Receipt, BarChart3
 } from 'lucide-react'
 import { Button, Card, Toggle, Avatar, ListItem, SectionHeader, Badge } from '../../components/ui'
 import useStore from '../../lib/store'
@@ -238,6 +239,38 @@ export default function Profile() {
               onChange={toggleDarkMode}
               label="Modo Escuro"
               description="Alterar tema da interface"
+            />
+          </Card>
+        </motion.div>
+
+        {/* Gestão Financeira */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+        >
+          <SectionHeader title="Gestão Financeira" />
+          <Card padding="p-2">
+            <ListItem
+              icon={RefreshCw}
+              iconColor="bg-violet-50 dark:bg-violet-900/20 text-violet-500"
+              title="Contas Fixas"
+              subtitle="Despesas e receitas recorrentes"
+              onClick={() => navigate('/app/recurring')}
+            />
+            <ListItem
+              icon={Receipt}
+              iconColor="bg-red-50 dark:bg-red-900/20 text-red-500"
+              title="Dívidas e Empréstimos"
+              subtitle="Controle de financiamentos"
+              onClick={() => navigate('/app/debts')}
+            />
+            <ListItem
+              icon={BarChart3}
+              iconColor="bg-cyan-50 dark:bg-cyan-900/20 text-cyan-500"
+              title="Relatório Mensal"
+              subtitle="DRE simplificado do casal"
+              onClick={() => navigate('/app/reports')}
             />
           </Card>
         </motion.div>

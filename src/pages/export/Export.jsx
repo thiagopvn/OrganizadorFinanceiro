@@ -89,10 +89,76 @@ export default function Export() {
       } else if (selectedFormat === 'ofx') {
         exportOFX()
       } else {
-        exportCSV() // PDF fallback to CSV
+        exportPDF()
       }
     } finally {
       setExporting(false)
+    }
+  }
+
+  const exportPDF = () => {
+    const income = filteredTransactions.filter(t => t.amount > 0 && t.transactionType !== 'savings').reduce((s, t) => s + t.amount, 0)
+    const expenses = filteredTransactions.filter(t => t.amount < 0 && t.transactionType !== 'savings').reduce((s, t) => s + Math.abs(t.amount), 0)
+    const savings = filteredTransactions.filter(t => t.transactionType === 'savings').reduce((s, t) => s + Math.abs(t.amount), 0)
+    const balance = income - expenses - savings
+    const periodStr = selectedPeriod === 'month' ? 'Este Mês' : selectedPeriod === 'quarter' ? 'Último Trimestre' : 'Último Ano'
+
+    const rows = filteredTransactions.map(t => {
+      const d = format(new Date(t.date || t.createdAt), 'dd/MM/yyyy')
+      const cat = CATEGORIES[t.category]?.label || t.category || ''
+      const tipo = t.transactionType === 'savings' ? 'Economia' : (t.amount >= 0 ? 'Receita' : 'Despesa')
+      return `<tr>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px">${d}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px">${t.description || ''}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px">${cat}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px">${tipo}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px;text-align:right;color:${t.amount >= 0 ? '#16a34a' : '#dc2626'};font-weight:600">
+          ${t.amount >= 0 ? '+' : ''}${formatCurrency(t.amount)}
+        </td>
+      </tr>`
+    }).join('')
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unity Finance - Extrato</title></head>
+    <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#1e293b">
+      <div style="text-align:center;margin-bottom:32px">
+        <h1 style="color:#f97316;font-size:24px;margin:0">Unity Finance</h1>
+        <p style="color:#64748b;font-size:14px;margin:4px 0">Extrato Financeiro — ${periodStr}</p>
+        <p style="color:#94a3b8;font-size:12px">Gerado em ${format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:32px">
+        <div style="flex:1;background:#f0fdf4;border-radius:12px;padding:16px;text-align:center">
+          <p style="font-size:11px;color:#16a34a;text-transform:uppercase;font-weight:700;margin:0 0 4px">Receitas</p>
+          <p style="font-size:20px;font-weight:700;color:#16a34a;margin:0">${formatCurrency(income)}</p>
+        </div>
+        <div style="flex:1;background:#fef2f2;border-radius:12px;padding:16px;text-align:center">
+          <p style="font-size:11px;color:#dc2626;text-transform:uppercase;font-weight:700;margin:0 0 4px">Despesas</p>
+          <p style="font-size:20px;font-weight:700;color:#dc2626;margin:0">${formatCurrency(expenses)}</p>
+        </div>
+        <div style="flex:1;background:#f8fafc;border-radius:12px;padding:16px;text-align:center">
+          <p style="font-size:11px;color:#0ea5e9;text-transform:uppercase;font-weight:700;margin:0 0 4px">Saldo</p>
+          <p style="font-size:20px;font-weight:700;color:${balance >= 0 ? '#16a34a' : '#dc2626'};margin:0">${formatCurrency(balance)}</p>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px">
+        <thead><tr style="background:#f8fafc">
+          <th style="padding:10px 8px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Data</th>
+          <th style="padding:10px 8px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Descrição</th>
+          <th style="padding:10px 8px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Categoria</th>
+          <th style="padding:10px 8px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Tipo</th>
+          <th style="padding:10px 8px;text-align:right;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Valor</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:32px">
+        ${filteredTransactions.length} transações • Unity Finance © ${new Date().getFullYear()}
+      </p>
+    </body></html>`
+
+    const printWindow = window.open('', '_blank')
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.onload = () => {
+      printWindow.print()
     }
   }
 

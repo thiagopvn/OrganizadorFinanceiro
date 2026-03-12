@@ -342,6 +342,47 @@ export const addInvestment = (coupleId, data) =>
 export const deleteInvestment = (coupleId, investmentId) =>
   deleteDoc(doc(db, 'couples', coupleId, 'investments', investmentId))
 
+// ─── Recurring Transaction helpers ──────────────────────────────────
+
+export const addRecurringTransaction = (coupleId, data) =>
+  addDoc(collection(db, 'couples', coupleId, 'recurringTransactions'), {
+    ...data,
+    active: true,
+    createdAt: serverTimestamp()
+  })
+
+export const updateRecurringTransaction = (coupleId, id, data) =>
+  updateDoc(doc(db, 'couples', coupleId, 'recurringTransactions', id), data)
+
+export const deleteRecurringTransaction = (coupleId, id) =>
+  deleteDoc(doc(db, 'couples', coupleId, 'recurringTransactions', id))
+
+// ─── Transaction comments ───────────────────────────────────────────
+
+export const addTransactionComment = (coupleId, transactionId, comment) =>
+  updateDoc(doc(db, 'couples', coupleId, 'transactions', transactionId), {
+    comments: arrayUnion(comment)
+  })
+
+// ─── Debt / Loan helpers ────────────────────────────────────────────
+
+export const addDebt = (coupleId, data) =>
+  addDoc(collection(db, 'couples', coupleId, 'debts'), {
+    ...data,
+    createdAt: serverTimestamp()
+  })
+
+export const updateDebt = (coupleId, debtId, data) =>
+  updateDoc(doc(db, 'couples', coupleId, 'debts', debtId), data)
+
+export const deleteDebt = (coupleId, debtId) =>
+  deleteDoc(doc(db, 'couples', coupleId, 'debts', debtId))
+
+// ─── Privacy settings persistence ───────────────────────────────────
+
+export const updatePrivacySettings = (userId, settings) =>
+  updateDoc(doc(db, 'users', userId), { privacySettings: settings })
+
 // ─── Couple settings ─────────────────────────────────────────────────
 
 export const updateCoupleSettings = (coupleId, data) =>
@@ -430,6 +471,26 @@ export const subscribeToInvestments = (coupleId, callback) => {
     callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
   }, (err) => {
     console.warn('Listener investments error:', err)
+    callback([])
+  })
+}
+
+export const subscribeToRecurringTransactions = (coupleId, callback) => {
+  const q = query(collection(db, 'couples', coupleId, 'recurringTransactions'))
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener recurring error:', err)
+    callback([])
+  })
+}
+
+export const subscribeToDebts = (coupleId, callback) => {
+  const q = query(collection(db, 'couples', coupleId, 'debts'))
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  }, (err) => {
+    console.warn('Listener debts error:', err)
     callback([])
   })
 }

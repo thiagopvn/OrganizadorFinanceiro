@@ -92,21 +92,37 @@ export function classifyTransaction(memo, amount, options = {}) {
 
   // Positive amounts (credits)
   if (amount > 0) {
-    // On credit card: "Pagamento recebido" = bill payment (not real income)
-    // These are partial payments the user makes to reduce the credit card balance
-    if (isCreditCard && normalized.includes('pagamento recebido')) {
+    // On credit card: ANY positive amount is a bill payment or refund (NOT real income)
+    if (isCreditCard) {
       return { category: 'outros', transactionType: 'income', isBillPayment: true }
     }
 
-    // On checking accounts: "Pagamento recebido" = real income (PIX, transfer, salary)
-    if (normalized.includes('pagamento recebido') || normalized.includes('salario') || normalized.includes('salário') ||
-        normalized.includes('deposito') || normalized.includes('depósito') || normalized.includes('transferencia recebida')) {
+    // On checking accounts: detect bill payments / transfers that are NOT real income
+    // Credit card bill payments on checking appear as credits when reversed or as "pagamento de fatura"
+    const billPaymentPatterns = [
+      'pagamento de fatura', 'pgto fatura', 'pag fatura', 'fatura cartao',
+      'fatura cartão', 'pagto cartao', 'pagto cartão', 'pgto cartao',
+      'pagamento cartao', 'pagamento cartão',
+      'transferencia entre contas', 'transf entre contas',
+      'resgate', 'resgate automatico', 'resgate automático',
+      'aplicacao', 'aplicação', 'aporte',
+    ]
+    if (billPaymentPatterns.some(p => normalized.includes(p))) {
+      return { category: 'outros', transactionType: 'income', isBillPayment: true }
+    }
+
+    // Real income patterns
+    if (normalized.includes('salario') || normalized.includes('salário') ||
+        normalized.includes('pagamento recebido') ||
+        normalized.includes('deposito') || normalized.includes('depósito') ||
+        normalized.includes('transferencia recebida') || normalized.includes('pix recebido') ||
+        normalized.includes('ted recebida') || normalized.includes('doc recebid')) {
       return { category: 'salario', transactionType: 'income' }
     }
     if (normalized.includes('freelan') || normalized.includes('99freelas') || normalized.includes('workana')) {
       return { category: 'freelance', transactionType: 'income' }
     }
-    // Generic credit / refund
+    // Generic credit / refund — still income but user can reclassify
     return { category: 'outros', transactionType: 'income' }
   }
 

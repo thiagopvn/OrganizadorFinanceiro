@@ -9,7 +9,7 @@ import { PageHeader } from '../../components/layout'
 import { Card, Badge, Avatar } from '../../components/ui'
 import useStore from '../../lib/store'
 import { formatCurrency, formatDateTime, CATEGORIES, toDate } from '../../lib/utils'
-import { deleteTransaction } from '../../lib/firebase'
+import { deleteTransaction, addTransactionComment } from '../../lib/firebase'
 
 export default function TransactionDetail() {
   const { id } = useParams()
@@ -27,7 +27,14 @@ export default function TransactionDetail() {
   const userName = user?.displayName || 'Você'
   const partnerName = partner?.displayName || 'Parceiro(a)'
 
-  const [comments, setComments] = useState([])
+  // Load persisted comments from transaction
+  const [comments, setComments] = useState(() => transaction?.comments || [])
+
+  useEffect(() => {
+    if (transaction?.comments) {
+      setComments(transaction.comments)
+    }
+  }, [transaction?.comments])
 
   useEffect(() => {
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -64,17 +71,27 @@ export default function TransactionDetail() {
     }
   }
 
-  const handleSendComment = () => {
+  const handleSendComment = async () => {
     if (!commentText.trim()) return
-    setComments(prev => [...prev, {
+    const comment = {
       id: `c${Date.now()}`,
       userId: user?.uid,
       name: userName,
       message: commentText.trim(),
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       isOwn: true
-    }])
+    }
+    setComments(prev => [...prev, comment])
     setCommentText('')
+
+    // Persist to Firebase
+    if (coupleId && transaction?.id) {
+      try {
+        await addTransactionComment(coupleId, transaction.id, comment)
+      } catch (e) {
+        console.warn('Erro ao salvar comentário:', e)
+      }
+    }
   }
 
   const handleKeyDown = (e) => {

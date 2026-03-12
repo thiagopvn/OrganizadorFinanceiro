@@ -7,7 +7,8 @@ import {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
   Heart, GraduationCap, ShoppingBag, Briefcase,
   Gift, Plane, MoreHorizontal, Shield, Zap, PiggyBank,
-  Filter, X, CalendarDays
+  Filter, X, CalendarDays, Activity, TrendingDown,
+  RefreshCw, Receipt, Award, Lock
 } from 'lucide-react'
 import * as AllLucideIcons from 'lucide-react'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, EmptyState } from '../../components/ui'
@@ -49,9 +50,11 @@ const PERIOD_LABELS = {
 export default function Dashboard() {
   const navigate = useNavigate()
   const {
-    transactions, goals, notifications,
+    transactions, goals, notifications, debts, recurringTransactions,
     privacyMode, togglePrivacyMode,
-    getNetWorth, getBalance, getTotalSavings, getGoalsWithProgress, user, partner,
+    getNetWorth, getBalance, getTotalSavings, getGoalsWithProgress,
+    getFinancialHealth, getCashFlowProjection, getSmartInsights,
+    user, partner,
     globalFilters, resetGlobalFilters
   } = useStore()
 
@@ -231,13 +234,111 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
+        {/* Financial Health Score */}
+        {filteredTransactions.length > 3 && globalFilters.period === 'month' && (
+          <motion.div variants={itemVariants}>
+            <SectionHeader
+              title="Saúde Financeira"
+              action="Relatório"
+              onAction={() => navigate('/app/reports')}
+            />
+            {(() => {
+              const health = getFinancialHealth()
+              const scoreColor = health.score >= 80 ? 'text-emerald-500' : health.score >= 60 ? 'text-blue-500' : health.score >= 40 ? 'text-amber-500' : 'text-red-500'
+              const scoreLabel = health.score >= 80 ? 'Excelente' : health.score >= 60 ? 'Bom' : health.score >= 40 ? 'Regular' : 'Atenção'
+              const scoreBg = health.score >= 80 ? 'bg-emerald-500' : health.score >= 60 ? 'bg-blue-500' : health.score >= 40 ? 'bg-amber-500' : 'bg-red-500'
+              return (
+                <Card padding="p-4">
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="relative w-16 h-16">
+                      <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
+                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          fill="none" stroke="currentColor" strokeWidth="3"
+                          className="text-slate-100 dark:text-slate-700" />
+                        <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          fill="none" strokeWidth="3" strokeLinecap="round"
+                          className={scoreColor}
+                          strokeDasharray={`${health.score}, 100`} />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className={`text-lg font-bold ${scoreColor}`}>{health.score}</span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-sm font-bold ${scoreColor}`}>{scoreLabel}</p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <PiggyBank className="w-3 h-3 text-violet-500" />
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">Poupança: {privacyMode ? '••' : `${health.savingsRate}%`}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-blue-500" />
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">Fixas: {privacyMode ? '••' : `${health.fixedRatio}%`}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Shield className="w-3 h-3 text-emerald-500" />
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400">Emergência: {health.hasEmergencyFund ? 'OK' : 'Criar'}</span>
+                        </div>
+                        {health.totalDebt > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <TrendingDown className="w-3 h-3 text-red-500" />
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">Dívida: {privacyMode ? '••' : `${health.debtRatio}%`}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })()}
+          </motion.div>
+        )}
+
+        {/* Smart Insights */}
+        {filteredTransactions.length > 3 && globalFilters.period === 'month' && (() => {
+          const insights = getSmartInsights()
+          if (insights.length === 0) return null
+          const INSIGHT_ICONS = { AlertTriangle, TrendingDown, Award, PiggyBank, Target, Lock, Shield }
+          const INSIGHT_COLORS = {
+            warning: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50',
+            danger: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50',
+            success: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50',
+            info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/50',
+          }
+          const INSIGHT_TEXT = {
+            warning: 'text-amber-700 dark:text-amber-300',
+            danger: 'text-red-700 dark:text-red-300',
+            success: 'text-emerald-700 dark:text-emerald-300',
+            info: 'text-blue-700 dark:text-blue-300',
+          }
+          return (
+            <motion.div variants={itemVariants}>
+              <SectionHeader title="Insights Inteligentes" />
+              <div className="space-y-2">
+                {insights.slice(0, 3).map((insight, i) => {
+                  const InsightIcon = INSIGHT_ICONS[insight.icon] || Zap
+                  return (
+                    <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border ${INSIGHT_COLORS[insight.type]}`}>
+                      <InsightIcon className={`w-4 h-4 shrink-0 mt-0.5 ${INSIGHT_TEXT[insight.type]}`} />
+                      <div>
+                        <p className={`text-xs font-semibold ${INSIGHT_TEXT[insight.type]}`}>{insight.title}</p>
+                        <p className={`text-[11px] mt-0.5 ${INSIGHT_TEXT[insight.type]} opacity-80`}>{insight.message}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </motion.div>
+          )
+        })()}
+
         {/* Quick Actions */}
         <motion.div variants={itemVariants}>
           <div className="grid grid-cols-4 gap-3">
             {[
               { icon: Target, label: 'Metas', path: '/app/budgets', color: 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400' },
-              { icon: Scissors, label: 'Divisão', path: '/app/split', color: 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400' },
-              { icon: CreditCard, label: 'Cartões', path: '/app/cards', color: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' },
+              { icon: RefreshCw, label: 'Fixas', path: '/app/recurring', color: 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400' },
+              { icon: Receipt, label: 'Dívidas', path: '/app/debts', color: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' },
               { icon: BarChart3, label: 'Investimentos', path: '/app/investments', color: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400' }
             ].map((action) => (
               <motion.button

@@ -37,7 +37,7 @@ export function AppLayout() {
           </div>
 
           <NavTab to="/app/analytics" icon={BarChart3} label="Análises" />
-          <NavTab to="/app/profile" icon={User} label="Perfil" />
+          <NavTab to="/app/profile" icon={User} label="Perfil" badge={unreadCount} />
         </div>
       </nav>
     </div>
