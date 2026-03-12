@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Camera, Delete, Check, Plus, X, Clock } from 'lucide-react'
+import { Camera, Delete, Check, Plus, X, Clock, CalendarDays } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
@@ -45,6 +45,7 @@ export default function AddTransaction({ onClose }) {
   const [paidBy, setPaidBy] = useState('user') // 'user' or 'partner'
   const [installments, setInstallments] = useState(1) // number of installments
   const [saving, setSaving] = useState(false)
+  const [selectedDate, setSelectedDate] = useState(format(smartDate, 'yyyy-MM-dd'))
 
   // Custom category form
   const [showNewCategory, setShowNewCategory] = useState(false)
@@ -113,7 +114,7 @@ export default function AddTransaction({ onClose }) {
         amount: signedAmount,
         category,
         transactionType: isSavings ? 'savings' : (tab === 'income' ? 'income' : 'expense'),
-        date: smartDate,
+        date: new Date(selectedDate + 'T12:00:00'),
         paidBy: selectedUid,
         paidByName: selectedName,
         isShared,
@@ -140,6 +141,7 @@ export default function AddTransaction({ onClose }) {
       setTab('expense')
       setPaidBy('user')
       setInstallments(1)
+      setSelectedDate(format(new Date(), 'yyyy-MM-dd'))
     } catch (err) {
       console.error('Erro ao salvar transação:', err)
       alert('Erro ao salvar. Tente novamente.')
@@ -177,15 +179,19 @@ export default function AddTransaction({ onClose }) {
         </button>
       </div>
 
-      {/* Smart date indicator */}
-      {globalFilters.period === 'last_month' && (
-        <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-1.5">
-          <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-          <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
-            Data: <span className="font-bold">{format(smartDate, "dd/MM/yyyy", { locale: ptBR })}</span> (mês filtrado)
-          </p>
+      {/* Date picker */}
+      <div>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 font-medium">Data</p>
+        <div className="relative">
+          <CalendarDays className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-full bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl pl-9 pr-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+          />
         </div>
-      )}
+      </div>
 
       {/* Expense / Income / Savings Tab */}
       <TabBar
