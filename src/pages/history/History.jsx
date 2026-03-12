@@ -1,52 +1,46 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isSameMonth, getDay } from 'date-fns'
+import {
+  format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay,
+  addMonths, subMonths, isSameMonth, isToday as isDateToday
+} from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Search, ChevronLeft, ChevronRight, X, Filter, Clock, Users, PiggyBank, ArrowLeft } from 'lucide-react'
+import {
+  Search, ChevronLeft, ChevronRight, X, Clock, Users,
+  PiggyBank, ArrowLeft, SlidersHorizontal, TrendingDown, TrendingUp, CalendarDays
+} from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { PageHeader } from '../../components/layout'
-import { Card, Badge, ProgressBar, SectionHeader, Avatar, Input } from '../../components/ui'
+import { Card, Badge, SectionHeader, Avatar, Input } from '../../components/ui'
 import useStore from '../../lib/store'
-import { formatCurrency, formatDate, CATEGORIES, getCategoryList, getProgressColor, getProgressTextColor, groupByDate, toDate } from '../../lib/utils'
+import {
+  formatCurrency, formatDate, CATEGORIES, getCategoryList, groupByDate, toDate
+} from '../../lib/utils'
 
 export default function History() {
   const navigate = useNavigate()
   const {
-    transactions, privacyMode, user, partner, getBudgetsWithSpent, getGoalsWithProgress,
+    transactions, privacyMode, user, partner,
     globalFilters, setGlobalFilters,
     drillDown, clearDrillDown
   } = useStore()
-  const legacyBudgets = getBudgetsWithSpent()
-  const allGoals = getGoalsWithProgress()
-
-  // Unified budget data: use goals (expense_limit) if available, fallback to legacy budgets
-  const budgets = useMemo(() => {
-    const expenseGoals = allGoals.filter(g => g.type === 'expense_limit')
-    if (expenseGoals.length > 0) {
-      return expenseGoals.map(g => ({ ...g, limit: g.targetAmount, spent: g.currentAmount }))
-    }
-    return legacyBudgets
-  }, [allGoals, legacyBudgets])
 
   // Drill-down state from analytics
   const [drillDownActive, setDrillDownActive] = useState(false)
   const [drillDownLabel, setDrillDownLabel] = useState('')
 
-  // Apply drill-down on mount
   useEffect(() => {
     if (drillDown) {
       if (drillDown.type === 'category') {
         setSelectedCategory(drillDown.category)
-        setShowSearch(true)
-        setViewAll(true)
+        setShowFilters(true)
         const catLabel = CATEGORIES[drillDown.category]?.label || drillDown.category
         setDrillDownLabel(`Categoria: ${catLabel}`)
         setDrillDownActive(true)
       } else if (drillDown.type === 'month') {
         const date = new Date(drillDown.year, drillDown.month - 1, 1)
         setCurrentMonth(date)
-        setViewAll(true)
         setDrillDownLabel(`${format(date, "MMMM 'de' yyyy", { locale: ptBR })}`)
         setDrillDownActive(true)
       }
@@ -58,43 +52,40 @@ export default function History() {
     setDrillDownActive(false)
     setDrillDownLabel('')
     setSelectedCategory(null)
-    setShowSearch(false)
+    setShowFilters(false)
   }
 
-  // Sync with global period filter
+  // State
   const [currentMonth, setCurrentMonth] = useState(() => {
     if (globalFilters.period === 'last_month') return subMonths(new Date(), 1)
     return new Date()
   })
-  const [selectedDay, setSelectedDay] = useState(new Date())
-  const [showSearch, setShowSearch] = useState(false)
+  const [selectedDay, setSelectedDay] = useState(null) // null = show all
+  const [showFilters, setShowFilters] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [selectedPartner, setSelectedPartner] = useState(null)
-  const [viewAll, setViewAll] = useState(true)
 
-  // Sync global filters users
+  const dayStripRef = useRef(null)
+
+  // Sync global filters
   useEffect(() => {
-    if (globalFilters.users !== 'all') {
-      setSelectedPartner(globalFilters.users)
-    }
+    if (globalFilters.users !== 'all') setSelectedPartner(globalFilters.users)
   }, [globalFilters.users])
 
-  // Apply global category filter if coming from analytics with single category
   useEffect(() => {
     if (globalFilters.selectedCategories.length === 1 && !drillDown) {
       setSelectedCategory(globalFilters.selectedCategories[0])
-      setShowSearch(true)
+      setShowFilters(true)
     }
   }, [])
 
-  // Calendar calculations
+  // Calendar data
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd })
-  const startDayOfWeek = getDay(monthStart)
 
-  // Transactions for the current month
+  // Month transactions
   const monthTransactions = useMemo(() => {
     return transactions.filter(t => {
       const d = toDate(t.date || t.createdAt)
@@ -102,7 +93,7 @@ export default function History() {
     })
   }, [transactions, currentMonth])
 
-  // Days that have transactions
+  // Days with transactions (for dot indicators)
   const daysWithTransactions = useMemo(() => {
     const days = new Set()
     monthTransactions.forEach(t => {
@@ -112,12 +103,25 @@ export default function History() {
     return days
   }, [monthTransactions])
 
+  // Daily totals for the strip
+  const dailyTotals = useMemo(() => {
+    const totals = {}
+    monthTransactions.forEach(t => {
+      const d = toDate(t.date || t.createdAt)
+      const key = format(d, 'yyyy-MM-dd')
+      if (!totals[key]) totals[key] = 0
+      if (t.amount < 0 && t.transactionType !== 'savings') {
+        totals[key] += Math.abs(t.amount)
+      }
+    })
+    return totals
+  }, [monthTransactions])
+
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
-    let filtered = viewAll ? monthTransactions : transactions.filter(t => {
-      const d = toDate(t.date || t.createdAt)
-      return isSameDay(d, selectedDay)
-    })
+    let filtered = selectedDay
+      ? transactions.filter(t => isSameDay(toDate(t.date || t.createdAt), selectedDay))
+      : monthTransactions
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -127,46 +131,46 @@ export default function History() {
         CATEGORIES[t.category]?.label.toLowerCase().includes(q)
       )
     }
-
     if (selectedCategory) {
       filtered = filtered.filter(t => t.category === selectedCategory)
     }
-
     if (selectedPartner) {
       filtered = filtered.filter(t => t.paidBy === selectedPartner)
     }
-
     return filtered
-  }, [viewAll, monthTransactions, transactions, selectedDay, searchQuery, selectedCategory, selectedPartner])
+  }, [selectedDay, monthTransactions, transactions, searchQuery, selectedCategory, selectedPartner])
 
   // Month summary
   const monthExpenses = useMemo(() =>
-    monthTransactions.filter(t => t.amount < 0 && t.transactionType !== 'savings').reduce((sum, t) => sum + Math.abs(t.amount), 0),
+    monthTransactions.filter(t => t.amount < 0 && t.transactionType !== 'savings').reduce((s, t) => s + Math.abs(t.amount), 0),
     [monthTransactions]
   )
   const monthIncome = useMemo(() =>
-    monthTransactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0),
+    monthTransactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0),
     [monthTransactions]
   )
-  const monthSavings = useMemo(() =>
-    monthTransactions.filter(t => t.transactionType === 'savings').reduce((sum, t) => sum + Math.abs(t.amount), 0),
-    [monthTransactions]
-  )
-
-  // Budget performance
-  const totalBudgetLimit = budgets.reduce((sum, b) => sum + b.limit, 0)
-  const totalBudgetSpent = budgets.reduce((sum, b) => sum + b.spent, 0)
-  const budgetPercent = totalBudgetLimit > 0 ? Math.round((totalBudgetSpent / totalBudgetLimit) * 100) : 0
+  const monthBalance = monthIncome - monthExpenses
 
   // Group filtered transactions by date
   const grouped = useMemo(() => groupByDate(filteredTransactions), [filteredTransactions])
 
-  const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
-
   const handleDayClick = (day) => {
-    setSelectedDay(day)
-    setViewAll(false)
+    if (selectedDay && isSameDay(selectedDay, day)) {
+      setSelectedDay(null) // toggle off → show all
+    } else {
+      setSelectedDay(day)
+    }
   }
+
+  // Scroll day strip to today or selected day on mount
+  useEffect(() => {
+    if (dayStripRef.current) {
+      const today = new Date()
+      const targetDay = isSameMonth(today, currentMonth) ? today.getDate() : 1
+      const el = dayStripRef.current.children[targetDay - 1]
+      if (el) el.scrollIntoView({ inline: 'center', behavior: 'smooth' })
+    }
+  }, [currentMonth])
 
   const getCategoryIcon = (categoryKey) => {
     const cat = CATEGORIES[categoryKey]
@@ -174,12 +178,7 @@ export default function History() {
     return LucideIcons[cat.icon] || LucideIcons.MoreHorizontal
   }
 
-  const getBudgetMessage = (percent) => {
-    if (percent < 50) return 'Excelente! Vocês estão bem dentro do orçamento.'
-    if (percent < 75) return 'Bom ritmo! Continuem controlando os gastos.'
-    if (percent < 90) return 'Atenção: vocês estão se aproximando do limite.'
-    return 'Cuidado: orçamento quase no limite!'
-  }
+  const activeFilters = [selectedCategory, selectedPartner, searchQuery].filter(Boolean).length
 
   return (
     <div className="min-h-screen bg-orange-50/50 dark:bg-slate-900">
@@ -187,16 +186,23 @@ export default function History() {
         title="Histórico"
         onBack={false}
         actions={
-          <button
-            onClick={() => setShowSearch(!showSearch)}
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-          >
-            {showSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
+            >
+              <SlidersHorizontal className="w-5 h-5" />
+              {activeFilters > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {activeFilters}
+                </span>
+              )}
+            </button>
+          </div>
         }
       />
 
-      <div className="px-5 pb-8 space-y-4">
+      <div className="px-5 pb-32 space-y-4">
         {/* Drill-down banner */}
         {drillDownActive && (
           <motion.div
@@ -216,233 +222,244 @@ export default function History() {
           </motion.div>
         )}
 
-        {/* Search Section */}
+        {/* ─── Month Navigator ────────────────────────────────────── */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => { setCurrentMonth(subMonths(currentMonth, 1)); setSelectedDay(null) }}
+            className="p-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => { setCurrentMonth(new Date()); setSelectedDay(null) }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors"
+          >
+            <CalendarDays className="w-4 h-4 text-brand-500" />
+            <h2 className="text-sm font-bold text-slate-800 dark:text-white capitalize">
+              {format(currentMonth, "MMMM yyyy", { locale: ptBR })}
+            </h2>
+          </button>
+          <button
+            onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); setSelectedDay(null) }}
+            className="p-2 rounded-xl hover:bg-white dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* ─── Horizontal Day Strip ───────────────────────────────── */}
+        <div
+          ref={dayStripRef}
+          className="flex gap-1.5 overflow-x-auto pb-2 -mx-5 px-5 hide-scrollbar scrollbar-hide"
+        >
+          {daysInMonth.map(day => {
+            const dateKey = format(day, 'yyyy-MM-dd')
+            const isSelected = selectedDay && isSameDay(day, selectedDay)
+            const hasTx = daysWithTransactions.has(dateKey)
+            const isToday = isDateToday(day)
+            const dayExpense = dailyTotals[dateKey] || 0
+            const weekDay = format(day, 'EEEEE', { locale: ptBR }).toUpperCase()
+
+            return (
+              <button
+                key={dateKey}
+                onClick={() => handleDayClick(day)}
+                className={`flex flex-col items-center shrink-0 w-11 py-2 rounded-xl transition-all ${
+                  isSelected
+                    ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
+                    : isToday
+                      ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'
+                }`}
+              >
+                <span className={`text-[9px] font-bold uppercase ${
+                  isSelected ? 'text-white/70' : 'text-slate-400 dark:text-slate-500'
+                }`}>
+                  {weekDay}
+                </span>
+                <span className={`text-sm font-bold mt-0.5 ${
+                  isSelected ? 'text-white' : ''
+                }`}>
+                  {format(day, 'd')}
+                </span>
+                {hasTx && (
+                  <div className={`w-1 h-1 rounded-full mt-1 ${
+                    isSelected ? 'bg-white' : 'bg-brand-500'
+                  }`} />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Show all button when a day is selected */}
+        {selectedDay && (
+          <button
+            onClick={() => setSelectedDay(null)}
+            className="w-full text-center text-xs font-semibold text-brand-500 hover:text-brand-600 py-1 transition-colors"
+          >
+            Ver todas do mês
+          </button>
+        )}
+
+        {/* ─── Filters Panel ─────────────────────────────────────── */}
         <AnimatePresence>
-          {showSearch && (
+          {showFilters && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="space-y-3 pt-4">
-                <Input
-                  icon={Search}
-                  placeholder="Buscar transações..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+              <Card>
+                <div className="space-y-4">
+                  {/* Search */}
+                  <Input
+                    icon={Search}
+                    placeholder="Buscar transações..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
 
-                {/* Category filter chips */}
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Categorias</p>
-                  <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
-                    <button
-                      onClick={() => setSelectedCategory(null)}
-                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        !selectedCategory
-                          ? 'bg-brand-500 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      Todas
-                    </button>
-                    {getCategoryList().map(cat => (
+                  {/* Category chips */}
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-widest">Categorias</p>
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide hide-scrollbar">
                       <button
-                        key={cat.key}
-                        onClick={() => setSelectedCategory(selectedCategory === cat.key ? null : cat.key)}
-                        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                          selectedCategory === cat.key
+                        onClick={() => setSelectedCategory(null)}
+                        className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          !selectedCategory
                             ? 'bg-brand-500 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
                         }`}
                       >
-                        {cat.label}
+                        Todas
                       </button>
-                    ))}
+                      {getCategoryList().map(cat => (
+                        <button
+                          key={cat.key}
+                          onClick={() => setSelectedCategory(selectedCategory === cat.key ? null : cat.key)}
+                          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            selectedCategory === cat.key
+                              ? 'bg-brand-500 text-white'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Partner filter */}
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Responsável</p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setSelectedPartner(null)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        !selectedPartner
-                          ? 'bg-brand-500 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                      Todos
-                    </button>
-                    <button
-                      onClick={() => setSelectedPartner(selectedPartner === user?.uid ? null : user?.uid)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        selectedPartner === user?.uid
-                          ? 'bg-brand-500 text-white'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
-                      }`}
-                    >
-                      <Avatar name={user?.displayName || 'Você'} size="sm" className="w-5 h-5 text-[8px]" />
-                      {user?.displayName || 'Você'}
-                    </button>
-                    {partner && (
+                  {/* Partner filter */}
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-2 uppercase tracking-widest">Responsável</p>
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => setSelectedPartner(selectedPartner === partner?.uid ? null : partner?.uid)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                          selectedPartner === partner?.uid
+                        onClick={() => setSelectedPartner(null)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          !selectedPartner
                             ? 'bg-brand-500 text-white'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
                         }`}
                       >
-                        <Avatar name={partner?.displayName || 'Parceiro(a)'} size="sm" className="w-5 h-5 text-[8px]" />
-                        {partner?.displayName || 'Parceiro(a)'}
+                        <Users className="w-3 h-3" />
+                        Todos
                       </button>
-                    )}
+                      <button
+                        onClick={() => setSelectedPartner(selectedPartner === user?.uid ? null : user?.uid)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          selectedPartner === user?.uid
+                            ? 'bg-brand-500 text-white'
+                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        <Avatar name={user?.displayName || 'Você'} size="sm" className="w-4 h-4 text-[7px]" />
+                        {user?.displayName || 'Você'}
+                      </button>
+                      {partner && (
+                        <button
+                          onClick={() => setSelectedPartner(selectedPartner === partner?.uid ? null : partner?.uid)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            selectedPartner === partner?.uid
+                              ? 'bg-brand-500 text-white'
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          <Avatar name={partner?.displayName || 'Parceiro(a)'} size="sm" className="w-4 h-4 text-[7px]" />
+                          {partner?.displayName || 'Parceiro(a)'}
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Clear filters */}
+                  {activeFilters > 0 && (
+                    <button
+                      onClick={() => { setSearchQuery(''); setSelectedCategory(null); setSelectedPartner(null) }}
+                      className="w-full text-center text-xs font-semibold text-red-500 hover:text-red-600 py-1"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
                 </div>
-              </div>
+              </Card>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Calendar */}
-        <Card className="mt-4">
-          {/* Month Navigation */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <h2 className="text-base font-bold text-slate-800 dark:text-white capitalize">
-              {format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}
-            </h2>
-            <button
-              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Week Day Headers */}
-          <div className="grid grid-cols-7 mb-2">
-            {weekDays.map((day, i) => (
-              <div key={i} className="text-center text-xs font-semibold text-slate-400 dark:text-slate-500 py-1">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Day Grid */}
-          <div className="grid grid-cols-7 gap-y-1">
-            {Array.from({ length: startDayOfWeek }).map((_, i) => (
-              <div key={`empty-${i}`} className="aspect-square" />
-            ))}
-
-            {daysInMonth.map(day => {
-              const dateKey = format(day, 'yyyy-MM-dd')
-              const isSelected = isSameDay(day, selectedDay) && !viewAll
-              const hasTransactions = daysWithTransactions.has(dateKey)
-              const isToday = isSameDay(day, new Date())
-
-              return (
-                <button
-                  key={dateKey}
-                  onClick={() => handleDayClick(day)}
-                  className="flex flex-col items-center justify-center aspect-square relative"
-                >
-                  <div
-                    className={`w-9 h-9 flex items-center justify-center rounded-full text-sm font-medium transition-all ${
-                      isSelected
-                        ? 'bg-brand-500 text-white font-bold'
-                        : isToday
-                          ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    {format(day, 'd')}
-                  </div>
-                  {hasTransactions && (
-                    <div className={`absolute bottom-0.5 w-1.5 h-1.5 rounded-full ${
-                      isSelected ? 'bg-white' : 'bg-brand-500'
-                    }`} />
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          {!viewAll && (
-            <button
-              onClick={() => setViewAll(true)}
-              className="w-full mt-3 py-2 text-xs font-semibold text-brand-500 hover:text-brand-600 transition-colors"
-            >
-              Ver todas as transações do mês
-            </button>
-          )}
-        </Card>
-
-        {/* Month Summary */}
-        <Card>
-          <div className={`grid ${monthSavings > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
-            <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Gasto</p>
-              <p className="text-lg font-bold text-red-500">
-                {privacyMode ? '••••' : formatCurrency(-monthExpenses)}
-              </p>
+        {/* ─── Month Summary ─────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-2">
+          <Card padding="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingDown className="w-3 h-3 text-red-400" />
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Despesas</p>
             </div>
-            <div className={monthSavings > 0 ? 'text-center' : 'text-right'}>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Recebido</p>
-              <p className="text-lg font-bold text-emerald-500">
-                {privacyMode ? '••••' : formatCurrency(monthIncome)}
-              </p>
+            <p className="text-sm font-bold text-red-500">
+              {privacyMode ? '••••' : formatCurrency(-monthExpenses)}
+            </p>
+          </Card>
+          <Card padding="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingUp className="w-3 h-3 text-emerald-400" />
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Receitas</p>
             </div>
-            {monthSavings > 0 && (
-              <div className="text-right">
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Guardado</p>
-                <p className="text-lg font-bold text-violet-500">
-                  {privacyMode ? '••••' : formatCurrency(monthSavings)}
-                </p>
-              </div>
-            )}
-          </div>
-        </Card>
+            <p className="text-sm font-bold text-emerald-500">
+              {privacyMode ? '••••' : formatCurrency(monthIncome)}
+            </p>
+          </Card>
+          <Card padding="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <PiggyBank className="w-3 h-3 text-blue-400" />
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Saldo</p>
+            </div>
+            <p className={`text-sm font-bold ${monthBalance >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+              {privacyMode ? '••••' : formatCurrency(monthBalance)}
+            </p>
+          </Card>
+        </div>
 
-        {/* Budget Performance */}
-        <Card>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-slate-800 dark:text-white">Desempenho do Orçamento</p>
-            <span className={`text-sm font-bold ${getProgressTextColor(budgetPercent)}`}>
-              {budgetPercent}%
-            </span>
-          </div>
-          <ProgressBar value={totalBudgetSpent} max={totalBudgetLimit} size="md" />
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-            {getBudgetMessage(budgetPercent)}
-          </p>
-        </Card>
-
-        {/* Transaction List */}
+        {/* ─── Transaction List ──────────────────────────────────── */}
         <div>
-          <SectionHeader
-            title={viewAll ? 'Transações do Mês' : `Transações de ${format(selectedDay, "dd 'de' MMMM", { locale: ptBR })}`}
-          />
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+              {selectedDay
+                ? format(selectedDay, "dd 'de' MMMM", { locale: ptBR })
+                : 'Transações do mês'
+              }
+            </p>
+            <Badge variant="info">{filteredTransactions.length}</Badge>
+          </div>
 
           {grouped.length === 0 ? (
             <Card>
-              <div className="py-8 text-center">
+              <div className="py-10 text-center">
                 <Clock className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
                 <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
                   Nenhuma transação encontrada
                 </p>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  {showSearch ? 'Tente alterar os filtros de busca.' : 'Selecione outro dia ou mês.'}
+                  {showFilters ? 'Tente alterar os filtros.' : 'Selecione outro dia ou mês.'}
                 </p>
               </div>
             </Card>
@@ -450,38 +467,33 @@ export default function History() {
             <div className="space-y-4">
               {grouped.map((group, gi) => (
                 <div key={gi}>
-                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5 pl-1">
                     {formatDate(group.date)}
                   </p>
-                  <Card padding="p-2">
+                  <Card padding="p-1.5">
                     <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
                       {group.transactions.map(transaction => {
                         const cat = CATEGORIES[transaction.category] || CATEGORIES.outros
                         const IconComponent = getCategoryIcon(transaction.category)
                         const isExpense = transaction.amount < 0
                         const isSavings = transaction.transactionType === 'savings'
-                        const transactionTime = format(
-                          toDate(transaction.date || transaction.createdAt),
-                          'HH:mm'
-                        )
 
                         return (
                           <motion.button
                             key={transaction.id}
                             onClick={() => navigate(`/app/transaction/${transaction.id}`)}
-                            className="flex items-center w-full py-3 px-2 gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/30 rounded-xl transition-colors"
+                            className="flex items-center w-full py-2.5 px-2 gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/30 rounded-xl transition-colors"
                             whileTap={{ scale: 0.98 }}
                           >
                             <div
-                              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                               style={{
                                 backgroundColor: isSavings ? '#8b5cf615' : `${cat?.color}15`,
-                                color: isSavings ? '#8b5cf6' : undefined
                               }}
                             >
                               {isSavings
-                                ? <PiggyBank className="w-5 h-5" style={{ color: '#8b5cf6' }} />
-                                : <IconComponent className="w-5 h-5" style={{ color: cat?.color }} />
+                                ? <PiggyBank className="w-4.5 h-4.5" style={{ color: '#8b5cf6' }} />
+                                : <IconComponent className="w-4.5 h-4.5" style={{ color: cat?.color }} />
                               }
                             </div>
 
@@ -489,20 +501,20 @@ export default function History() {
                               <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                                 {transaction.description}
                               </p>
-                              <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
-                                {isSavings && 'Economia · '}{transaction.installment && `Parcela ${transaction.installment.current}/${transaction.installment.total} · `}{transaction.merchant && `${transaction.merchant} · `}{transactionTime}
+                              <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                                {isSavings && 'Economia · '}
+                                {transaction.installment && `${transaction.installment.current}/${transaction.installment.total} · `}
+                                {cat?.label}
                               </p>
                             </div>
 
-                            <div className="text-right shrink-0">
-                              <p className={`text-sm font-bold ${
-                                isSavings ? 'text-violet-500' :
-                                isExpense ? 'text-red-500' :
-                                'text-emerald-500'
-                              }`}>
-                                {privacyMode ? '••••' : formatCurrency(transaction.amount)}
-                              </p>
-                            </div>
+                            <p className={`text-sm font-bold shrink-0 ${
+                              isSavings ? 'text-violet-500' :
+                              isExpense ? 'text-red-500' :
+                              'text-emerald-500'
+                            }`}>
+                              {privacyMode ? '••••' : formatCurrency(transaction.amount)}
+                            </p>
                           </motion.button>
                         )
                       })}
