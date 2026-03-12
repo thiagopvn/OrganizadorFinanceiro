@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
   BarChart3, Users, PiggyBank, Filter, ChevronDown,
   Wallet, Target, Activity, DollarSign, Percent,
-  Clock, Flame, Award, AlertTriangle, Copy, Zap, ExternalLink
+  Clock, Flame, Award, AlertTriangle, Zap, ExternalLink
 } from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Card, SectionHeader, Badge, EmptyState, Avatar } from '../../components/ui'
@@ -372,31 +372,7 @@ export default function Analytics() {
     const alerts = []
     const now = new Date()
 
-    // 1. Duplicate detection: same amount + same description in same month
-    const currentMonthTx = filtered.filter(t => t.amount < 0)
-    const seen = {}
-    currentMonthTx.forEach(t => {
-      const key = `${Math.abs(t.amount).toFixed(2)}_${(t.description || '').toLowerCase().trim()}`
-      if (!seen[key]) seen[key] = []
-      seen[key].push(t)
-    })
-    Object.entries(seen).forEach(([_, txs]) => {
-      if (txs.length >= 2) {
-        const desc = txs[0].description || 'transação'
-        const amt = Math.abs(txs[0].amount)
-        alerts.push({
-          type: 'duplicate',
-          icon: Copy,
-          color: 'text-amber-500',
-          bg: 'bg-amber-50 dark:bg-amber-900/10',
-          borderColor: 'border-amber-200 dark:border-amber-800/30',
-          title: 'Possível cobrança duplicada',
-          message: `Você teve ${txs.length} lançamentos de "${desc}" com valor ${formatCurrency(-amt)} neste período.`
-        })
-      }
-    })
-
-    // 2. Category anomaly: current period vs historical average (last 6 months)
+    // 1. Category anomaly: current period vs historical average (last 6 months)
     const sixMonthsAgo = subMonths(now, 6)
     const historicalTx = transactions.filter(t => {
       const d = toDate(t.date || t.createdAt)
