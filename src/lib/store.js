@@ -65,6 +65,29 @@ const useStore = create((set, get) => ({
   investments: [],
   setInvestments: (investments) => set({ investments }),
 
+  // Global Filters — shared across Analytics, History, Dashboard
+  globalFilters: {
+    period: 'month',           // 'month' | 'last_month' | '3months' | '6months' | '12months' | 'all'
+    selectedCategories: [],    // empty = all categories
+    type: 'all',               // 'all' | 'expense' | 'income' | 'savings'
+    users: 'all',              // 'all' | userId
+  },
+  setGlobalFilters: (filters) => set({
+    globalFilters: { ...get().globalFilters, ...filters }
+  }),
+  resetGlobalFilters: () => set({
+    globalFilters: { period: 'month', selectedCategories: [], type: 'all', users: 'all' }
+  }),
+
+  // Drill-down context — set by Analytics, consumed by History
+  drillDown: null, // { type: 'category', category: 'mercado' } or { type: 'month', year: 2026, month: 2 }
+  setDrillDown: (ctx) => set({ drillDown: ctx }),
+  clearDrillDown: () => set({ drillDown: null }),
+
+  // AddTransaction context — pre-selected category from current screen
+  addTransactionContext: null, // { category: 'lazer' } or null
+  setAddTransactionContext: (ctx) => set({ addTransactionContext: ctx }),
+
   // UI State
   showAddTransaction: false,
   setShowAddTransaction: (show) => set({ showAddTransaction: show }),
@@ -229,7 +252,9 @@ const useStore = create((set, get) => ({
   // Reset all data on logout
   reset: () => set({
     user: null, userProfile: null, couple: null, partner: null, coupleId: null,
-    transactions: [], budgets: [], goals: [], subscriptions: [], settlements: [], cards: [], investments: [], notifications: []
+    transactions: [], budgets: [], goals: [], subscriptions: [], settlements: [], cards: [], investments: [], notifications: [],
+    globalFilters: { period: 'month', selectedCategories: [], type: 'all', users: 'all' },
+    drillDown: null, addTransactionContext: null
   })
 }))
 

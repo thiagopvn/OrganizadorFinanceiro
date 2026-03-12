@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isSameMonth, getDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Search, ChevronLeft, ChevronRight, X, Filter, Clock, Users, PiggyBank } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, X, Filter, Clock, Users, PiggyBank, ArrowLeft } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { PageHeader } from '../../components/layout'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, Input } from '../../components/ui'
@@ -12,10 +12,60 @@ import { formatCurrency, formatDate, CATEGORIES, getCategoryList, getProgressCol
 
 export default function History() {
   const navigate = useNavigate()
-  const { transactions, privacyMode, user, partner, getBudgetsWithSpent } = useStore()
-  const budgets = getBudgetsWithSpent()
+  const {
+    transactions, privacyMode, user, partner, getBudgetsWithSpent, getGoalsWithProgress,
+    globalFilters, setGlobalFilters,
+    drillDown, clearDrillDown
+  } = useStore()
+  const legacyBudgets = getBudgetsWithSpent()
+  const allGoals = getGoalsWithProgress()
 
-  const [currentMonth, setCurrentMonth] = useState(new Date())
+  // Unified budget data: use goals (expense_limit) if available, fallback to legacy budgets
+  const budgets = useMemo(() => {
+    const expenseGoals = allGoals.filter(g => g.type === 'expense_limit')
+    if (expenseGoals.length > 0) {
+      return expenseGoals.map(g => ({ ...g, limit: g.targetAmount, spent: g.currentAmount }))
+    }
+    return legacyBudgets
+  }, [allGoals, legacyBudgets])
+
+  // Drill-down state from analytics
+  const [drillDownActive, setDrillDownActive] = useState(false)
+  const [drillDownLabel, setDrillDownLabel] = useState('')
+
+  // Apply drill-down on mount
+  useEffect(() => {
+    if (drillDown) {
+      if (drillDown.type === 'category') {
+        setSelectedCategory(drillDown.category)
+        setShowSearch(true)
+        setViewAll(true)
+        const catLabel = CATEGORIES[drillDown.category]?.label || drillDown.category
+        setDrillDownLabel(`Categoria: ${catLabel}`)
+        setDrillDownActive(true)
+      } else if (drillDown.type === 'month') {
+        const date = new Date(drillDown.year, drillDown.month - 1, 1)
+        setCurrentMonth(date)
+        setViewAll(true)
+        setDrillDownLabel(`${format(date, "MMMM 'de' yyyy", { locale: ptBR })}`)
+        setDrillDownActive(true)
+      }
+      clearDrillDown()
+    }
+  }, [drillDown, clearDrillDown])
+
+  const clearDrillDownMode = () => {
+    setDrillDownActive(false)
+    setDrillDownLabel('')
+    setSelectedCategory(null)
+    setShowSearch(false)
+  }
+
+  // Sync with global period filter
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    if (globalFilters.period === 'last_month') return subMonths(new Date(), 1)
+    return new Date()
+  })
   const [selectedDay, setSelectedDay] = useState(new Date())
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -23,11 +73,26 @@ export default function History() {
   const [selectedPartner, setSelectedPartner] = useState(null)
   const [viewAll, setViewAll] = useState(true)
 
+  // Sync global filters users
+  useEffect(() => {
+    if (globalFilters.users !== 'all') {
+      setSelectedPartner(globalFilters.users)
+    }
+  }, [globalFilters.users])
+
+  // Apply global category filter if coming from analytics with single category
+  useEffect(() => {
+    if (globalFilters.selectedCategories.length === 1 && !drillDown) {
+      setSelectedCategory(globalFilters.selectedCategories[0])
+      setShowSearch(true)
+    }
+  }, [])
+
   // Calendar calculations
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd })
-  const startDayOfWeek = getDay(monthStart) // 0 = Sunday
+  const startDayOfWeek = getDay(monthStart)
 
   // Transactions for the current month
   const monthTransactions = useMemo(() => {
@@ -132,6 +197,25 @@ export default function History() {
       />
 
       <div className="px-5 pb-8 space-y-4">
+        {/* Drill-down banner */}
+        {drillDownActive && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center gap-2 p-3 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800/30 rounded-xl">
+              <ArrowLeft className="w-4 h-4 text-brand-500 shrink-0" />
+              <p className="text-xs font-semibold text-brand-600 dark:text-brand-400 flex-1">
+                Filtrando por: {drillDownLabel}
+              </p>
+              <button onClick={clearDrillDownMode} className="text-brand-500 hover:text-brand-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Search Section */}
         <AnimatePresence>
           {showSearch && (
@@ -257,12 +341,10 @@ export default function History() {
 
           {/* Day Grid */}
           <div className="grid grid-cols-7 gap-y-1">
-            {/* Empty cells for days before month start */}
             {Array.from({ length: startDayOfWeek }).map((_, i) => (
               <div key={`empty-${i}`} className="aspect-square" />
             ))}
 
-            {/* Day cells */}
             {daysInMonth.map(day => {
               const dateKey = format(day, 'yyyy-MM-dd')
               const isSelected = isSameDay(day, selectedDay) && !viewAll
@@ -296,7 +378,6 @@ export default function History() {
             })}
           </div>
 
-          {/* View toggle */}
           {!viewAll && (
             <button
               onClick={() => setViewAll(true)}
@@ -409,7 +490,7 @@ export default function History() {
                                 {transaction.description}
                               </p>
                               <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
-                                {isSavings && 'Economia · '}{transaction.merchant && `${transaction.merchant} · `}{transactionTime}
+                                {isSavings && 'Economia · '}{transaction.installment && `Parcela ${transaction.installment.current}/${transaction.installment.total} · `}{transaction.merchant && `${transaction.merchant} · `}{transactionTime}
                               </p>
                             </div>
 

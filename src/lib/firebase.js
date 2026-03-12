@@ -193,6 +193,36 @@ export const addTransaction = (coupleId, data) =>
     status: 'synced'
   })
 
+// Create installment transactions — one per month for N months
+export const addInstallmentTransactions = async (coupleId, data, totalInstallments) => {
+  const batch = writeBatch(db)
+  const baseDate = data.date instanceof Date ? data.date : new Date(data.date)
+  const groupId = `inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+  for (let i = 0; i < totalInstallments; i++) {
+    const installmentDate = new Date(baseDate)
+    installmentDate.setMonth(installmentDate.getMonth() + i)
+    // Handle month overflow (e.g. Jan 31 + 1 month = Feb 28)
+    if (installmentDate.getDate() !== baseDate.getDate()) {
+      installmentDate.setDate(0) // last day of previous month
+    }
+
+    const docRef = doc(collection(db, 'couples', coupleId, 'transactions'))
+    batch.set(docRef, {
+      ...data,
+      description: `${data.description} (${i + 1}/${totalInstallments})`,
+      date: Timestamp.fromDate(installmentDate),
+      installment: { current: i + 1, total: totalInstallments },
+      installmentGroupId: groupId,
+      tags: [`parcela ${i + 1}/${totalInstallments}`],
+      createdAt: serverTimestamp(),
+      status: 'synced'
+    })
+  }
+
+  return batch.commit()
+}
+
 export const updateTransaction = (coupleId, transactionId, data) =>
   updateDoc(doc(db, 'couples', coupleId, 'transactions', transactionId), data)
 

@@ -6,14 +6,17 @@ import {
   Wallet, CreditCard, BarChart3, Scissors, Target,
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
   Heart, GraduationCap, ShoppingBag, Briefcase,
-  Gift, Plane, MoreHorizontal, Shield, Zap, PiggyBank
+  Gift, Plane, MoreHorizontal, Shield, Zap, PiggyBank,
+  Filter, X, CalendarDays
 } from 'lucide-react'
 import * as AllLucideIcons from 'lucide-react'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, EmptyState } from '../../components/ui'
-import { getProgressColor, getProgressTextColor } from '../../lib/utils'
+import { getProgressColor, getProgressTextColor, toDate } from '../../lib/utils'
 import { PageTransition } from '../../components/layout'
 import useStore from '../../lib/store'
 import { formatCurrency, formatDate, CATEGORIES } from '../../lib/utils'
+import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 const ICON_MAP = {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
@@ -34,19 +37,69 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } }
 }
 
+const PERIOD_LABELS = {
+  month: 'Este mês',
+  last_month: 'Mês anterior',
+  '3months': '3 meses',
+  '6months': '6 meses',
+  '12months': '12 meses',
+  all: 'Tudo',
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const {
     transactions, goals, notifications,
     privacyMode, togglePrivacyMode,
-    getNetWorth, getBalance, getTotalSavings, getGoalsWithProgress, user, partner
+    getNetWorth, getBalance, getTotalSavings, getGoalsWithProgress, user, partner,
+    globalFilters, resetGlobalFilters
   } = useStore()
 
   const allGoals = getGoalsWithProgress()
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications])
-  const balance = getBalance()
-  const totalSavings = getTotalSavings()
-  const recentTransactions = useMemo(() => transactions.slice(0, 6), [transactions])
+
+  // --- Date range from globalFilters.period ---
+  const dateRange = useMemo(() => {
+    const now = new Date()
+    let start, end
+    switch (globalFilters.period) {
+      case 'month': start = startOfMonth(now); end = endOfMonth(now); break
+      case 'last_month': start = startOfMonth(subMonths(now, 1)); end = endOfMonth(subMonths(now, 1)); break
+      case '3months': start = startOfMonth(subMonths(now, 2)); end = endOfMonth(now); break
+      case '6months': start = startOfMonth(subMonths(now, 5)); end = endOfMonth(now); break
+      case '12months': start = startOfMonth(subMonths(now, 11)); end = endOfMonth(now); break
+      default: start = new Date(2000, 0, 1); end = endOfMonth(now); break
+    }
+    return { start, end }
+  }, [globalFilters.period])
+
+  // --- Filter transactions by period + user ---
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      const d = toDate(t.date || t.createdAt)
+      if (d < dateRange.start || d > dateRange.end) return false
+      if (globalFilters.users !== 'all' && t.paidBy !== globalFilters.users) return false
+      return true
+    })
+  }, [transactions, dateRange, globalFilters.users])
+
+  // --- Computed from filtered data ---
+  const balance = useMemo(() => filteredTransactions.reduce((sum, t) => sum + t.amount, 0), [filteredTransactions])
+  const totalSavings = useMemo(() => filteredTransactions.filter(t => t.transactionType === 'savings').reduce((sum, t) => sum + Math.abs(t.amount), 0), [filteredTransactions])
+  const recentTransactions = useMemo(() => filteredTransactions.slice(0, 6), [filteredTransactions])
+
+  // --- Check if filters are non-default ---
+  const isFilterActive = globalFilters.period !== 'month' || globalFilters.users !== 'all' || globalFilters.selectedCategories.length > 0 || globalFilters.type !== 'all'
+
+  // --- Period label for badge ---
+  const periodLabel = useMemo(() => {
+    if (globalFilters.period === 'month') return null
+    if (globalFilters.period === 'last_month') {
+      const m = subMonths(new Date(), 1)
+      return format(m, "MMMM 'de' yyyy", { locale: ptBR })
+    }
+    return PERIOD_LABELS[globalFilters.period] || null
+  }, [globalFilters.period])
 
   // Budget alerts - expense limits approaching or over
   const budgetAlerts = useMemo(() => {
@@ -93,6 +146,18 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {/* Filter indicator */}
+            {isFilterActive && (
+              <button
+                onClick={resetGlobalFilters}
+                className="p-2.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors text-slate-500 dark:text-slate-400 relative"
+                aria-label="Resetar filtros"
+                title="Resetar filtros para hoje"
+              >
+                <Filter className="w-5 h-5" />
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-brand-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
+              </button>
+            )}
             {/* Privacy toggle */}
             <button
               onClick={togglePrivacyMode}
@@ -117,6 +182,25 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
+        {/* Period Badge */}
+        {periodLabel && (
+          <motion.div variants={itemVariants}>
+            <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl px-3 py-2">
+              <CalendarDays className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-300 flex-1">
+                Visão de <span className="font-bold capitalize">{periodLabel}</span>
+              </p>
+              <button
+                onClick={resetGlobalFilters}
+                className="p-1 rounded-full hover:bg-amber-200/50 dark:hover:bg-amber-800/30 text-amber-600 dark:text-amber-400"
+                aria-label="Voltar para mês atual"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
         {/* Net Worth Card */}
         <motion.div variants={itemVariants}>
           <div className="gradient-brand rounded-2xl p-6 shadow-lg shadow-brand-500/20 text-white relative overflow-hidden">
@@ -125,13 +209,15 @@ export default function Dashboard() {
             <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-white/5 rounded-full" />
 
             <div className="relative z-10">
-              <p className="text-white/80 text-sm font-medium mb-1">Saldo do Casal</p>
+              <p className="text-white/80 text-sm font-medium mb-1">
+                {periodLabel ? `Saldo do Período` : 'Saldo do Casal'}
+              </p>
               <h2 className="text-3xl font-bold mb-2">{displayValue(balance)}</h2>
-              {transactions.length > 0 && (
+              {filteredTransactions.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <div className="flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-0.5">
                     <TrendingUp className="w-3.5 h-3.5" />
-                    <span className="text-xs font-semibold">{transactions.length} transações</span>
+                    <span className="text-xs font-semibold">{filteredTransactions.length} transações</span>
                   </div>
                   {totalSavings > 0 && (
                     <div className="flex items-center gap-1 bg-white/20 rounded-full px-2.5 py-0.5">
@@ -277,7 +363,7 @@ export default function Dashboard() {
         {/* Recent Transactions */}
         <motion.div variants={itemVariants}>
           <SectionHeader
-            title="Transações Recentes"
+            title={periodLabel ? 'Transações do Período' : 'Transações Recentes'}
             action="Ver tudo"
             onAction={() => navigate('/app/history')}
           />

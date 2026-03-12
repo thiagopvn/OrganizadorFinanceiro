@@ -102,7 +102,7 @@ export default function Export() {
       const d = format(new Date(t.date || t.createdAt), 'dd/MM/yyyy')
       const cat = CATEGORIES[t.category]?.label || t.category || ''
       const desc = (t.description || '').replace(/,/g, ';')
-      const tipo = t.amount >= 0 ? 'Receita' : 'Despesa'
+      const tipo = t.transactionType === 'savings' ? 'Economia' : (t.amount >= 0 ? 'Receita' : 'Despesa')
       const shared = t.isShared ? 'Sim' : 'Não'
       return `${d},${desc},${cat},${t.amount.toFixed(2)},${tipo},${shared}`
     }).join('\n')

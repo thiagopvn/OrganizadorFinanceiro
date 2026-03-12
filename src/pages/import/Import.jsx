@@ -232,7 +232,7 @@ export default function Import() {
         date: Timestamp.fromDate(tx.date || new Date()),
         paidBy: user.uid,
         paidByName: user.displayName || user.email || '',
-        isShared: false,
+        isShared: true,
         splitType: 'equal',
         merchant: tx.description,
         tags: tx.installment ? [`parcela ${tx.installment.current}/${tx.installment.total}`] : [],

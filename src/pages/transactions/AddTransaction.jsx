@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Camera, Delete, Check, Plus, X } from 'lucide-react'
+import { Camera, Delete, Check, Plus, X, Clock } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
@@ -9,8 +9,10 @@ import {
 } from 'lucide-react'
 import { Button, Toggle, TabBar, Avatar, Input } from '../../components/ui'
 import useStore from '../../lib/store'
-import { addTransaction } from '../../lib/firebase'
+import { addTransaction, addInstallmentTransactions } from '../../lib/firebase'
 import { getCategoryList, CATEGORIES, formatCurrency, addCustomCategory, CUSTOM_CATEGORY_COLORS, CUSTOM_CATEGORY_ICONS } from '../../lib/utils'
+import { endOfMonth, subMonths, addMonths, format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 const ICON_MAP = {
   ShoppingCart, UtensilsCrossed, Car, Home, Gamepad2,
@@ -25,13 +27,23 @@ const NUM_KEYS = [
   ['.', '0', 'del']
 ]
 
+// Compute smart default date based on globalFilters.period
+function getSmartDate(period) {
+  if (period === 'last_month') {
+    return endOfMonth(subMonths(new Date(), 1))
+  }
+  return new Date()
+}
+
 export default function AddTransaction({ onClose }) {
-  const { user, partner, coupleId, setShowSuccess } = useStore()
+  const { user, partner, coupleId, setShowSuccess, addTransactionContext, setAddTransactionContext, globalFilters } = useStore()
+  const smartDate = getSmartDate(globalFilters.period)
   const [amountStr, setAmountStr] = useState('0')
-  const [category, setCategory] = useState('mercado')
+  const [category, setCategory] = useState(addTransactionContext?.category || 'mercado')
   const [isShared, setIsShared] = useState(true)
   const [tab, setTab] = useState('expense')
   const [paidBy, setPaidBy] = useState('user') // 'user' or 'partner'
+  const [installments, setInstallments] = useState(1) // number of installments
   const [saving, setSaving] = useState(false)
 
   // Custom category form
@@ -96,12 +108,12 @@ export default function AddTransaction({ onClose }) {
     const selectedName = paidBy === 'partner' && partner ? (partner.displayName || 'Parceiro(a)') : (user.displayName || 'Eu')
 
     try {
-      await addTransaction(coupleId, {
+      const txData = {
         description: isSavings ? `Economia: ${cat?.label || 'Poupança'}` : (cat?.label || 'Transação'),
         amount: signedAmount,
         category,
         transactionType: isSavings ? 'savings' : (tab === 'income' ? 'income' : 'expense'),
-        date: new Date(),
+        date: smartDate,
         paidBy: selectedUid,
         paidByName: selectedName,
         isShared,
@@ -109,10 +121,17 @@ export default function AddTransaction({ onClose }) {
         merchant: '',
         tags: [],
         comments: []
-      })
+      }
+
+      if (tab === 'expense' && installments > 1) {
+        await addInstallmentTransactions(coupleId, txData, installments)
+      } else {
+        await addTransaction(coupleId, txData)
+      }
 
       onClose()
       setShowSuccess({ amount: signedAmount, category, transactionType: isSavings ? 'savings' : undefined })
+      setAddTransactionContext(null)
 
       // Reset form
       setAmountStr('0')
@@ -120,6 +139,7 @@ export default function AddTransaction({ onClose }) {
       setIsShared(true)
       setTab('expense')
       setPaidBy('user')
+      setInstallments(1)
     } catch (err) {
       console.error('Erro ao salvar transação:', err)
       alert('Erro ao salvar. Tente novamente.')
@@ -156,6 +176,16 @@ export default function AddTransaction({ onClose }) {
           <Camera className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Smart date indicator */}
+      {globalFilters.period === 'last_month' && (
+        <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg px-3 py-1.5">
+          <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+            Data: <span className="font-bold">{format(smartDate, "dd/MM/yyyy", { locale: ptBR })}</span> (mês filtrado)
+          </p>
+        </div>
+      )}
 
       {/* Expense / Income / Savings Tab */}
       <TabBar
@@ -276,6 +306,34 @@ export default function AddTransaction({ onClose }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Installment selector — only for expenses */}
+      {tab === 'expense' && (
+        <div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">Parcelas</p>
+          <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 hide-scrollbar">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
+              <motion.button
+                key={n}
+                whileTap={{ scale: 0.93 }}
+                onClick={() => setInstallments(n)}
+                className={`min-w-[42px] px-2.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
+                  installments === n
+                    ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {n}x
+              </motion.button>
+            ))}
+          </div>
+          {installments > 1 && (
+            <p className="text-[11px] text-brand-500 font-medium mt-1">
+              {installments}x de {formatCurrency(parsedAmount / 100)} = {formatCurrency((parsedAmount / 100) * installments)} total
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Shared toggle */}
       <Toggle
