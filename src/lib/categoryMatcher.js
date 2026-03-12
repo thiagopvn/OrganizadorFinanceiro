@@ -90,27 +90,8 @@ export function classifyTransaction(memo, amount, options = {}) {
     return result ? { ...result, transactionType: txType } : { category: 'outros', transactionType: txType }
   }
 
-  // Positive amounts (credits)
+  // Positive amounts (credits) — all treated as income
   if (amount > 0) {
-    // On credit card: ANY positive amount is a bill payment or refund (NOT real income)
-    if (isCreditCard) {
-      return { category: 'outros', transactionType: 'income', isBillPayment: true }
-    }
-
-    // On checking accounts: detect bill payments / transfers that are NOT real income
-    // Credit card bill payments on checking appear as credits when reversed or as "pagamento de fatura"
-    const billPaymentPatterns = [
-      'pagamento de fatura', 'pgto fatura', 'pag fatura', 'fatura cartao',
-      'fatura cartão', 'pagto cartao', 'pagto cartão', 'pgto cartao',
-      'pagamento cartao', 'pagamento cartão',
-      'transferencia entre contas', 'transf entre contas',
-      'resgate', 'resgate automatico', 'resgate automático',
-      'aplicacao', 'aplicação', 'aporte',
-    ]
-    if (billPaymentPatterns.some(p => normalized.includes(p))) {
-      return { category: 'outros', transactionType: 'income', isBillPayment: true }
-    }
-
     // Real income patterns
     if (normalized.includes('salario') || normalized.includes('salário') ||
         normalized.includes('pagamento recebido') ||
@@ -122,7 +103,7 @@ export function classifyTransaction(memo, amount, options = {}) {
     if (normalized.includes('freelan') || normalized.includes('99freelas') || normalized.includes('workana')) {
       return { category: 'freelance', transactionType: 'income' }
     }
-    // Generic credit / refund — still income but user can reclassify
+    // Generic positive amount — income
     return { category: 'outros', transactionType: 'income' }
   }
 
@@ -224,7 +205,6 @@ export function processTransactions(rawTransactions, options = {}) {
       installment,
       isIOF: normalizedMemo.startsWith('iof de '),
       isEstorno: normalizedMemo.startsWith('estorno de '),
-      isBillPayment: result.isBillPayment || false,
     }
   })
 }
