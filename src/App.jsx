@@ -36,10 +36,16 @@ import Wrapped from './pages/wrapped/Wrapped'
 import RecurringTransactions from './pages/recurring/RecurringTransactions'
 import Debts from './pages/debts/Debts'
 import MonthlyReport from './pages/reports/MonthlyReport'
+import DebtSimulator from './pages/simulator/DebtSimulator'
+import SmartGoals from './pages/smart-goals/SmartGoals'
 
 // Modals
 import { BottomSheet } from './components/ui'
 import { SuccessModal, AchievementModal } from './pages/modals/Modals'
+
+// PWA
+import PWAInstallPrompt from './components/PWAInstallPrompt'
+import PWAUpdatePrompt from './components/PWAUpdatePrompt'
 
 // Error Boundary
 class ErrorBoundary extends Component {
@@ -280,6 +286,8 @@ export default function App() {
           <Route path="recurring" element={<RecurringTransactions />} />
           <Route path="debts" element={<Debts />} />
           <Route path="reports" element={<MonthlyReport />} />
+          <Route path="simulator" element={<DebtSimulator />} />
+          <Route path="smart-goals" element={<SmartGoals />} />
         </Route>
 
         <Route path="*" element={<Navigate to={user ? "/app/home" : "/login"} replace />} />
@@ -295,6 +303,9 @@ export default function App() {
 
       <SuccessModal data={showSuccess} onClose={() => setShowSuccess(null)} />
       <AchievementModal data={showAchievement} onClose={() => setShowAchievement(null)} />
+
+      <PWAInstallPrompt />
+      <PWAUpdatePrompt />
     </ErrorBoundary>
   )
 }

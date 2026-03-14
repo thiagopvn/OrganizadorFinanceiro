@@ -5,7 +5,7 @@ import {
   Shield, Fingerprint, Plane, Settings, Bell, Moon,
   FileText, Sparkles, Lock, HelpCircle, LogOut, ChevronRight,
   UserPlus, Copy, Check, Link2, X, Heart, Upload,
-  RefreshCw, Receipt, BarChart3
+  RefreshCw, Receipt, BarChart3, Calculator, Lightbulb
 } from 'lucide-react'
 import { Button, Card, Toggle, Avatar, ListItem, SectionHeader, Badge } from '../../components/ui'
 import useStore from '../../lib/store'
@@ -264,6 +264,20 @@ export default function Profile() {
               title="Dívidas e Empréstimos"
               subtitle="Controle de financiamentos"
               onClick={() => navigate('/app/debts')}
+            />
+            <ListItem
+              icon={Calculator}
+              iconColor="bg-brand-50 dark:bg-brand-900/20 text-brand-500"
+              title="Simulador de Impacto"
+              subtitle="Simule compras parceladas antes de comprar"
+              onClick={() => navigate('/app/simulator')}
+            />
+            <ListItem
+              icon={Lightbulb}
+              iconColor="bg-violet-50 dark:bg-violet-900/20 text-violet-500"
+              title="Metas Inteligentes"
+              subtitle="Sugestões de economia personalizadas"
+              onClick={() => navigate('/app/smart-goals')}
             />
             <ListItem
               icon={BarChart3}
