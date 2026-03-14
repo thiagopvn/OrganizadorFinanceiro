@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -8,12 +8,14 @@ import {
   Heart, GraduationCap, ShoppingBag, Briefcase,
   Gift, Plane, MoreHorizontal, Shield, Zap, PiggyBank,
   Filter, X, CalendarDays, Activity, TrendingDown,
-  RefreshCw, Receipt, Award, Lock
+  RefreshCw, Receipt, Award, Lock, Calculator, Lightbulb,
+  RotateCw, Sparkles, ChevronRight
 } from 'lucide-react'
 import * as AllLucideIcons from 'lucide-react'
 import { Card, Badge, ProgressBar, SectionHeader, Avatar, EmptyState } from '../../components/ui'
 import { getProgressColor, getProgressTextColor, toDate } from '../../lib/utils'
 import { PageTransition } from '../../components/layout'
+import { forceReload, checkForUpdates } from '../../components/PWAUpdatePrompt'
 import useStore from '../../lib/store'
 import { formatCurrency, formatDate, CATEGORIES } from '../../lib/utils'
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns'
@@ -116,6 +118,15 @@ export default function Dashboard() {
     return allGoals.filter(g => g.type !== 'expense_limit')
   }, [allGoals])
 
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const handleForceUpdate = () => {
+    setIsUpdating(true)
+    // Try SW update first, then force reload
+    checkForUpdates()
+    setTimeout(() => forceReload(), 500)
+  }
+
   const displayValue = (value) => {
     if (privacyMode) return 'R$ ••••••'
     return formatCurrency(value)
@@ -183,6 +194,31 @@ export default function Dashboard() {
               )}
             </button>
           </div>
+        </motion.div>
+
+        {/* Update App Button */}
+        <motion.div variants={itemVariants}>
+          <button
+            onClick={handleForceUpdate}
+            disabled={isUpdating}
+            className="w-full flex items-center gap-3 bg-gradient-to-r from-brand-50 to-amber-50 dark:from-brand-900/20 dark:to-amber-900/20 border border-brand-200 dark:border-brand-800/50 rounded-xl px-4 py-3 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-8 h-8 rounded-lg gradient-brand flex items-center justify-center shrink-0 shadow-sm shadow-brand-500/20">
+              {isUpdating
+                ? <RotateCw className="w-4 h-4 text-white animate-spin" />
+                : <RotateCw className="w-4 h-4 text-white" />
+              }
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-xs font-bold text-slate-800 dark:text-white">
+                {isUpdating ? 'Atualizando...' : 'Atualizar App'}
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                Toque para carregar a versao mais recente
+              </p>
+            </div>
+            <Sparkles className="w-4 h-4 text-brand-500 shrink-0" />
+          </button>
         </motion.div>
 
         {/* Period Badge */}
@@ -353,6 +389,67 @@ export default function Dashboard() {
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{action.label}</span>
               </motion.button>
             ))}
+          </div>
+        </motion.div>
+
+        {/* Gestão Financeira */}
+        <motion.div variants={itemVariants}>
+          <SectionHeader title="Gestão Financeira" />
+          <div className="space-y-2">
+            {/* Simulador de Impacto - featured card */}
+            <Card padding="p-0" onClick={() => navigate('/app/simulator')}>
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-11 h-11 rounded-xl gradient-brand flex items-center justify-center shrink-0 shadow-sm shadow-brand-500/20">
+                  <Calculator className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">Simulador de Impacto</p>
+                    <Badge variant="brand" className="!text-[9px]">Novo</Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Simule compras parceladas antes de decidir</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+              </div>
+            </Card>
+
+            {/* Metas Inteligentes - featured card */}
+            <Card padding="p-0" onClick={() => navigate('/app/smart-goals')}>
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm shadow-violet-500/20">
+                  <Lightbulb className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">Metas Inteligentes</p>
+                    <Badge variant="brand" className="!text-[9px]">Novo</Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Sugestões de economia baseadas nos seus gastos</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+              </div>
+            </Card>
+
+            {/* Other management links */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              {[
+                { icon: RefreshCw, label: 'Contas Fixas', path: '/app/recurring', color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/20' },
+                { icon: Receipt, label: 'Dívidas', path: '/app/debts', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' },
+                { icon: BarChart3, label: 'Relatório', path: '/app/reports', color: 'text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-900/20' },
+              ].map(item => (
+                <motion.button
+                  key={item.label}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate(item.path)}
+                  className="flex flex-col items-center gap-1.5 bg-white dark:bg-slate-800 rounded-xl py-3 px-2 shadow-sm border border-slate-100 dark:border-slate-700/50"
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${item.bg}`}>
+                    <item.icon className={`w-4 h-4 ${item.color}`} />
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">{item.label}</span>
+                </motion.button>
+              ))}
+            </div>
           </div>
         </motion.div>
 
